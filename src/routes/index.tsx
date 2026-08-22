@@ -23,6 +23,7 @@ import {
 
 import heroImage from "@/assets/hero-learning.jpg";
 import { CheckoutDialog } from "@/components/CheckoutDialog";
+import { COURSE_ID, COURSE_PRICE_INR, COURSE_TITLE } from "@/lib/course";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,9 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const COURSE_TITLE = "Full-Stack Career Accelerator";
-const PRICE = 4499;
-const ORIGINAL_PRICE = 11999;
+const PRICE = COURSE_PRICE_INR;
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -59,6 +58,17 @@ export const Route = createFileRoute("/")({
 function Landing() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(true);
+  const [hasCourseAccess, setHasCourseAccess] = useState(false);
+
+  useEffect(() => {
+    setHasCourseAccess(window.localStorage.getItem(`course-access:${COURSE_ID}`) === "verified");
+  }, []);
+
+  const unlockCourse = (email: string) => {
+    window.localStorage.setItem(`course-access:${COURSE_ID}`, "verified");
+    window.localStorage.setItem(`course-access-email:${COURSE_ID}`, email);
+    setHasCourseAccess(true);
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -67,8 +77,8 @@ function Landing() {
         <Hero onBuy={() => setCheckoutOpen(true)} />
         <NoticeBar open={noticeOpen} onToggle={() => setNoticeOpen((v) => !v)} />
         <section className="mx-auto grid max-w-7xl gap-8 px-4 py-10 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] lg:py-14">
-          <CourseContent onBuy={() => setCheckoutOpen(true)} />
-          <Sidebar onBuy={() => setCheckoutOpen(true)} />
+          <CourseContent onBuy={() => setCheckoutOpen(true)} hasAccess={hasCourseAccess} />
+          <Sidebar onBuy={() => setCheckoutOpen(true)} hasAccess={hasCourseAccess} />
         </section>
       </main>
       <Footer />
@@ -77,6 +87,7 @@ function Landing() {
         onOpenChange={setCheckoutOpen}
         price={PRICE}
         title={COURSE_TITLE}
+        onPaymentSuccess={unlockCourse}
       />
     </div>
   );
@@ -282,7 +293,7 @@ const FAQS = [
   },
 ];
 
-function CourseContent({ onBuy }: { onBuy: () => void }) {
+function CourseContent({ onBuy, hasAccess }: { onBuy: () => void; hasAccess: boolean }) {
   return (
     <div className="min-w-0 space-y-6">
       <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
@@ -354,17 +365,30 @@ function CourseContent({ onBuy }: { onBuy: () => void }) {
         </TabsContent>
 
         <TabsContent value="curriculum" className="mt-5">
-          <div className="divide-y divide-border rounded-2xl border border-border bg-card shadow-soft">
-            {CURRICULUM.map((module) => (
-              <div key={module.week} className="grid gap-1 p-5 sm:grid-cols-[9rem_minmax(0,1fr)]">
-                <p className="text-sm font-semibold text-muted-foreground">{module.week}</p>
-                <div className="min-w-0">
-                  <p className="font-display font-bold">{module.title}</p>
-                  <p className="text-sm text-muted-foreground">{module.desc}</p>
+          {hasAccess ? (
+            <div className="divide-y divide-border rounded-2xl border border-border bg-card shadow-soft">
+              {CURRICULUM.map((module) => (
+                <div key={module.week} className="grid gap-1 p-5 sm:grid-cols-[9rem_minmax(0,1fr)]">
+                  <p className="text-sm font-semibold text-muted-foreground">{module.week}</p>
+                  <div className="min-w-0">
+                    <p className="font-display font-bold">{module.title}</p>
+                    <p className="text-sm text-muted-foreground">{module.desc}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-soft">
+              <BadgeCheck className="mx-auto h-10 w-10 text-brand-foreground" />
+              <h3 className="mt-3 font-display text-xl font-bold">Curriculum locked</h3>
+              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                Complete the ₹{PRICE} enrollment payment to unlock all course modules and lifetime access.
+              </p>
+              <Button variant="brand" size="lg" className="mt-5" onClick={onBuy}>
+                Unlock course for ₹{PRICE}
+              </Button>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="instructor" className="mt-5">
@@ -434,10 +458,6 @@ function PricingCard({ onBuy }: { onBuy: () => void }) {
         </p>
         <div className="mt-2 flex flex-wrap items-baseline gap-3">
           <span className="font-display text-4xl font-bold">₹{PRICE.toLocaleString("en-IN")}</span>
-          <span className="text-lg text-muted-foreground line-through">
-            ₹{ORIGINAL_PRICE.toLocaleString("en-IN")}
-          </span>
-          <Badge className="bg-success text-success-foreground hover:bg-success">62% off</Badge>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
           One-time payment · Lifetime access · 7-day refund
@@ -464,7 +484,7 @@ function useCountdown(days: number) {
   };
 }
 
-function Sidebar({ onBuy }: { onBuy: () => void }) {
+function Sidebar({ onBuy, hasAccess }: { onBuy: () => void; hasAccess: boolean }) {
   const time = useCountdown(8);
 
   return (
@@ -513,8 +533,13 @@ function Sidebar({ onBuy }: { onBuy: () => void }) {
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-success/10 px-4 py-3 text-sm font-semibold text-success">
-            <BadgeCheck className="h-4 w-4" /> You've Registered
+          <div
+            className={`mt-4 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold ${
+              hasAccess ? "bg-success/10 text-success" : "bg-secondary text-muted-foreground"
+            }`}
+          >
+            <BadgeCheck className="h-4 w-4" />
+            {hasAccess ? "Course unlocked" : "Enrollment available"}
           </div>
         </div>
       </div>
@@ -522,9 +547,6 @@ function Sidebar({ onBuy }: { onBuy: () => void }) {
       <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
         <div className="flex flex-wrap items-baseline gap-2">
           <span className="font-display text-3xl font-bold">₹{PRICE.toLocaleString("en-IN")}</span>
-          <span className="text-sm text-muted-foreground line-through">
-            ₹{ORIGINAL_PRICE.toLocaleString("en-IN")}
-          </span>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">Price rises when the timer hits zero.</p>
         <Button variant="brand" size="lg" className="mt-4 w-full" onClick={onBuy}>

@@ -66,3 +66,21 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Razorpay setup
+
+The checkout uses Razorpay Orders and hosted Checkout. Configure these server-side environment
+variables before running the app or deploying it:
+
+```sh
+RAZORPAY_KEY_ID=rzp_test_...
+RAZORPAY_KEY_SECRET=...
+```
+
+Copy `.env.example` to `.env` and paste your keys. Create credentials in the Razorpay Dashboard
+(Settings → API Keys). Use **test** keys (`rzp_test_...`) for local development.
+
+Never expose `RAZORPAY_KEY_SECRET` as a `VITE_*` variable or commit it to the repository.
+
+Restart `npm run dev` after changing `.env`. Test payments with Razorpay test cards / UPI
+(success: `ACCT-000006`). The course is currently charged at ₹1 for gateway testing.
