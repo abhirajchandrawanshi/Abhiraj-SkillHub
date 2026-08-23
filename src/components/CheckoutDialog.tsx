@@ -1,7 +1,11 @@
 import { useState } from "react";
-import { CreditCard, Loader2, Lock, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { Loader2, Lock, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { z } from "zod";
 
+import { COURSE_ID } from "@/lib/course";
+import { loadRazorpayCheckout } from "@/lib/load-razorpay";
+import { createRazorpayOrder, verifyRazorpayPayment } from "@/lib/razorpay";
+import type { CourseAccess } from "@/lib/access";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,12 +21,6 @@ import { Separator } from "@/components/ui/separator";
 const checkoutSchema = z.object({
   name: z.string().trim().min(2, "Enter your full name").max(100, "Name is too long"),
   email: z.string().trim().email("Enter a valid email").max(255, "Email is too long"),
-  card: z
-    .string()
-    .trim()
-    .regex(/^[0-9 ]{16,23}$/, "Enter a valid 16-digit card number"),
-  expiry: z.string().trim().regex(/^(0[1-9]|1[0-2])\/\d{2}$/, "Use MM/YY"),
-  cvc: z.string().trim().regex(/^\d{3,4}$/, "3 or 4 digits"),
 });
 
 type Errors = Partial<Record<keyof z.infer<typeof checkoutSchema>, string>>;
@@ -32,20 +30,23 @@ export function CheckoutDialog({
   onOpenChange,
   price,
   title,
+  onPaymentSuccess,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   price: number;
   title: string;
+  onPaymentSuccess: (access: CourseAccess) => void;
 }) {
-  const [form, setForm] = useState({ name: "", email: "", card: "", expiry: "", cvc: "" });
+  const [form, setForm] = useState({ name: "", email: "" });
   const [errors, setErrors] = useState<Errors>({});
+  const [paymentError, setPaymentError] = useState("");
   const [status, setStatus] = useState<"idle" | "processing" | "done">("idle");
 
   const set = (key: keyof typeof form) => (value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  const submit = (event: React.FormEvent) => {
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     const parsed = checkoutSchema.safeParse(form);
     if (!parsed.success) {
@@ -57,14 +58,78 @@ export function CheckoutDialog({
       return;
     }
     setErrors({});
+    setPaymentError("");
     setStatus("processing");
-    // Placeholder for Stripe / Razorpay checkout session creation.
-    window.setTimeout(() => setStatus("done"), 1600);
+
+    try {
+      const order = await createRazorpayOrder({
+        data: {
+          courseId: COURSE_ID,
+          name: parsed.data.name,
+          email: parsed.data.email,
+        },
+      });
+
+      await loadRazorpayCheckout();
+      if (!window.Razorpay) throw new Error("Razorpay Checkout could not be loaded.");
+
+      const razorpay = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: "Abhiraj Chandrawanshi",
+        description: title,
+        order_id: order.orderId,
+        prefill: { name: parsed.data.name, email: parsed.data.email },
+        theme: { color: "#e85d04" },
+        handler: async (response) => {
+          try {
+            const verified = await verifyRazorpayPayment({
+              data: {
+                orderId: response.razorpay_order_id,
+                paymentId: response.razorpay_payment_id,
+                signature: response.razorpay_signature,
+              },
+            });
+            onPaymentSuccess({
+              email: parsed.data.email.trim().toLowerCase(),
+              paymentId: verified.paymentId,
+              orderId: verified.orderId,
+              grantedAt: new Date().toISOString(),
+            });
+            setStatus("done");
+          } catch {
+            setPaymentError(
+              "Payment could not be verified. Please contact support before trying again.",
+            );
+            setStatus("idle");
+          }
+        },
+        modal: { ondismiss: () => setStatus("idle") },
+      });
+      razorpay.on("payment.failed", (payload) => {
+        const reason = payload.error.description?.trim() || payload.error.reason?.trim();
+        setPaymentError(
+          reason
+            ? `Payment failed: ${reason}`
+            : "Payment failed. No amount was charged. Please try again.",
+        );
+        setStatus("idle");
+      });
+      razorpay.open();
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : "Unable to start payment.");
+      setStatus("idle");
+    }
   };
 
   const close = (next: boolean) => {
     onOpenChange(next);
-    if (!next) window.setTimeout(() => setStatus("idle"), 200);
+    if (!next)
+      window.setTimeout(() => {
+        setStatus("idle");
+        setPaymentError("");
+      }, 200);
   };
 
   return (
@@ -75,20 +140,17 @@ export function CheckoutDialog({
             <CheckCircle2 className="mx-auto h-14 w-14 text-success" />
             <DialogTitle className="mt-4 text-2xl">Payment successful</DialogTitle>
             <DialogDescription className="mt-2">
-              You're enrolled in {title}. A receipt and course access link are on their way to{" "}
-              {form.email}.
+              Your payment is verified. The complete PDF is now unlocked.
             </DialogDescription>
             <Button className="mt-6 w-full" size="lg" onClick={() => close(false)}>
-              Start learning
+              Read the PDF
             </Button>
           </div>
         ) : (
           <form onSubmit={submit}>
             <DialogHeader>
               <DialogTitle className="text-2xl">Secure checkout</DialogTitle>
-              <DialogDescription>
-                {title} — one-time payment, lifetime access.
-              </DialogDescription>
+              <DialogDescription>{title} — one-time payment, lifetime access.</DialogDescription>
             </DialogHeader>
 
             <div className="mt-5 space-y-4">
@@ -109,40 +171,18 @@ export function CheckoutDialog({
                 onChange={set("email")}
                 error={errors.email}
               />
-              <Field
-                id="card"
-                label="Card number"
-                placeholder="4242 4242 4242 4242"
-                value={form.card}
-                onChange={set("card")}
-                error={errors.card}
-                icon
-              />
-              <div className="grid grid-cols-2 gap-4">
-                <Field
-                  id="expiry"
-                  label="Expiry"
-                  placeholder="12/28"
-                  value={form.expiry}
-                  onChange={set("expiry")}
-                  error={errors.expiry}
-                />
-                <Field
-                  id="cvc"
-                  label="CVC"
-                  placeholder="123"
-                  value={form.cvc}
-                  onChange={set("cvc")}
-                  error={errors.cvc}
-                />
-              </div>
+              <p className="rounded-lg bg-secondary px-3 py-2 text-sm text-muted-foreground">
+                Razorpay securely handles cards, UPI, net banking, and wallets after you continue.
+              </p>
             </div>
 
             <Separator className="my-5" />
 
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Total due today</span>
-              <span className="font-display text-2xl font-bold">₹{price.toLocaleString("en-IN")}</span>
+              <span className="font-display text-2xl font-bold">
+                ₹{price.toLocaleString("en-IN")}
+              </span>
             </div>
 
             <Button
@@ -162,9 +202,12 @@ export function CheckoutDialog({
               )}
             </Button>
 
+            {paymentError ? (
+              <p className="mt-3 text-center text-xs text-destructive">{paymentError}</p>
+            ) : null}
+
             <p className="mt-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-              <ShieldCheck className="h-3.5 w-3.5" /> Demo checkout — connect Stripe or Razorpay to
-              go live.
+              <ShieldCheck className="h-3.5 w-3.5" /> Secured by Razorpay
             </p>
           </form>
         )}
@@ -181,7 +224,6 @@ function Field({
   error,
   placeholder,
   type = "text",
-  icon = false,
 }: {
   id: string;
   label: string;
@@ -190,7 +232,6 @@ function Field({
   error?: string | undefined;
   placeholder?: string;
   type?: string;
-  icon?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
@@ -202,14 +243,47 @@ function Field({
           value={value}
           placeholder={placeholder ?? ""}
           onChange={(event) => onChange(event.target.value)}
-          className={icon ? "pl-9" : ""}
           aria-invalid={Boolean(error)}
         />
-        {icon ? (
-          <CreditCard className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        ) : null}
       </div>
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>
   );
 }
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: RazorpayOptions) => RazorpayInstance;
+  }
+}
+
+type RazorpayOptions = {
+  key: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description: string;
+  order_id: string;
+  prefill: { name: string; email: string };
+  theme: { color: string };
+  handler: (response: RazorpayResponse) => void;
+  modal: { ondismiss: () => void };
+};
+
+type RazorpayResponse = {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+};
+
+type RazorpayInstance = {
+  open: () => void;
+  on: (event: "payment.failed", handler: (payload: RazorpayFailurePayload) => void) => void;
+};
+
+type RazorpayFailurePayload = {
+  error: {
+    description?: string;
+    reason?: string;
+  };
+};
