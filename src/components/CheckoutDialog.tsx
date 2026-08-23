@@ -5,6 +5,7 @@ import { z } from "zod";
 import { COURSE_ID } from "@/lib/course";
 import { loadRazorpayCheckout } from "@/lib/load-razorpay";
 import { createRazorpayOrder, verifyRazorpayPayment } from "@/lib/razorpay";
+import type { CourseAccess } from "@/lib/access";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -35,7 +36,7 @@ export function CheckoutDialog({
   onOpenChange: (open: boolean) => void;
   price: number;
   title: string;
-  onPaymentSuccess: (email: string) => void;
+  onPaymentSuccess: (access: CourseAccess) => void;
 }) {
   const [form, setForm] = useState({ name: "", email: "" });
   const [errors, setErrors] = useState<Errors>({});
@@ -83,14 +84,19 @@ export function CheckoutDialog({
         theme: { color: "#e85d04" },
         handler: async (response) => {
           try {
-            await verifyRazorpayPayment({
+            const verified = await verifyRazorpayPayment({
               data: {
                 orderId: response.razorpay_order_id,
                 paymentId: response.razorpay_payment_id,
                 signature: response.razorpay_signature,
               },
             });
-            onPaymentSuccess(parsed.data.email.trim().toLowerCase());
+            onPaymentSuccess({
+              email: parsed.data.email.trim().toLowerCase(),
+              paymentId: verified.paymentId,
+              orderId: verified.orderId,
+              grantedAt: new Date().toISOString(),
+            });
             setStatus("done");
           } catch {
             setPaymentError(
@@ -101,8 +107,13 @@ export function CheckoutDialog({
         },
         modal: { ondismiss: () => setStatus("idle") },
       });
-      razorpay.on("payment.failed", () => {
-        setPaymentError("Payment failed. No amount was charged. Please try again.");
+      razorpay.on("payment.failed", (payload) => {
+        const reason = payload.error.description?.trim() || payload.error.reason?.trim();
+        setPaymentError(
+          reason
+            ? `Payment failed: ${reason}`
+            : "Payment failed. No amount was charged. Please try again.",
+        );
         setStatus("idle");
       });
       razorpay.open();
@@ -129,11 +140,10 @@ export function CheckoutDialog({
             <CheckCircle2 className="mx-auto h-14 w-14 text-success" />
             <DialogTitle className="mt-4 text-2xl">Payment successful</DialogTitle>
             <DialogDescription className="mt-2">
-              You're enrolled in {title}. A receipt and course access link are on their way to{" "}
-              {form.email}.
+              Your payment is verified. The complete PDF is now unlocked.
             </DialogDescription>
             <Button className="mt-6 w-full" size="lg" onClick={() => close(false)}>
-              Start learning
+              Read the PDF
             </Button>
           </div>
         ) : (
@@ -268,5 +278,12 @@ type RazorpayResponse = {
 
 type RazorpayInstance = {
   open: () => void;
-  on: (event: "payment.failed", handler: () => void) => void;
+  on: (event: "payment.failed", handler: (payload: RazorpayFailurePayload) => void) => void;
+};
+
+type RazorpayFailurePayload = {
+  error: {
+    description?: string;
+    reason?: string;
+  };
 };

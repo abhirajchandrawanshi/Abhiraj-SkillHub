@@ -1,21 +1,22 @@
 import { Link } from "@tanstack/react-router";
-import { Bell, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import { useState } from "react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { useCourseAccess } from "@/hooks/use-course-access";
+import { COURSE_PRICE_INR } from "@/lib/course";
 
 export const NAV_LINKS = [
-  { label: "Home", to: "/" },
-  { label: "Courses", to: "/courses" },
-  { label: "About", to: "/about" },
-  { label: "Reviews", to: "/reviews" },
-  { label: "FAQs", to: "/faqs" },
-  { label: "1:1 Session", to: "/one-on-one" },
+  { label: "Home", to: "/", hash: "" },
+  { label: "Course", to: "/", hash: "course" },
+  { label: "About", to: "/", hash: "about" },
+  { label: "Reviews", to: "/", hash: "reviews" },
+  { label: "FAQs", to: "/", hash: "faqs" },
 ] as const;
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
+  const { access } = useCourseAccess();
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur">
@@ -32,9 +33,10 @@ export function SiteHeader() {
         <nav className="hidden justify-center gap-1 lg:flex">
           {NAV_LINKS.map((link) => (
             <Link
-              key={link.to}
+              key={link.label}
               to={link.to}
-              activeOptions={{ exact: link.to === "/" }}
+              hash={link.hash || undefined}
+              activeOptions={{ exact: link.to === "/" && !link.hash }}
               className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[status=active]:bg-accent data-[status=active]:text-accent-foreground"
             >
               {link.label}
@@ -43,15 +45,17 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-2">
-          <Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-brand" />
-          </Button>
-          <Avatar className="h-9 w-9 border border-border">
-            <AvatarFallback className="bg-ink text-xs font-semibold text-ink-foreground">
-              AC
-            </AvatarFallback>
-          </Avatar>
+          {access ? (
+            <Button variant="brand" size="sm" asChild>
+              <Link to="/learn">Continue</Link>
+            </Button>
+          ) : (
+            <Button variant="brand" size="sm" asChild>
+              <Link to="/" hash="enroll">
+                Enroll · ₹{COURSE_PRICE_INR}
+              </Link>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -69,15 +73,23 @@ export function SiteHeader() {
         <nav className="grid gap-1 border-t border-border bg-background px-4 py-3 lg:hidden">
           {NAV_LINKS.map((link) => (
             <Link
-              key={link.to}
+              key={link.label}
               to={link.to}
-              activeOptions={{ exact: link.to === "/" }}
+              hash={link.hash || undefined}
               onClick={() => setOpen(false)}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground data-[status=active]:bg-accent data-[status=active]:text-accent-foreground"
+              className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
               {link.label}
             </Link>
           ))}
+          <Link
+            to={access ? "/learn" : "/"}
+            hash={access ? undefined : "enroll"}
+            onClick={() => setOpen(false)}
+            className="rounded-lg px-3 py-2 text-sm font-semibold"
+          >
+            {access ? "Open classroom" : `Enroll — ₹${COURSE_PRICE_INR}`}
+          </Link>
         </nav>
       ) : null}
     </header>

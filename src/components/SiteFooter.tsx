@@ -5,12 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 const FOOTER_LINKS = [
-  { label: "About", to: "/about" },
-  { label: "Courses", to: "/courses" },
-  { label: "Reviews", to: "/reviews" },
-  { label: "FAQs", to: "/faqs" },
-  { label: "1:1 Session", to: "/one-on-one" },
-  { label: "Contact", to: "/about" },
+  { label: "Course", to: "/", hash: "course" },
+  { label: "About", to: "/", hash: "about" },
+  { label: "Reviews", to: "/", hash: "reviews" },
+  { label: "FAQs", to: "/", hash: "faqs" },
+  { label: "Enroll", to: "/", hash: "enroll" },
+  { label: "Classroom", to: "/learn", hash: "" },
 ] as const;
 
 export function SiteFooter() {
@@ -40,7 +40,12 @@ export function SiteFooter() {
 
         <nav className="grid grid-cols-2 gap-2 text-sm">
           {FOOTER_LINKS.map((link) => (
-            <Link key={link.label} to={link.to} className="text-ink-foreground/70 hover:text-brand">
+            <Link
+              key={link.label}
+              to={link.to}
+              hash={link.hash || undefined}
+              className="text-ink-foreground/70 hover:text-brand"
+            >
               {link.label}
             </Link>
           ))}

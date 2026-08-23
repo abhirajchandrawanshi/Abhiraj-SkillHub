@@ -23,6 +23,15 @@ type RazorpayOrder = {
   currency: string;
 };
 
+type RazorpayPayment = {
+  id: string;
+  order_id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  captured: boolean;
+};
+
 function getRazorpayCredentials() {
   const keyId = process.env.RAZORPAY_KEY_ID?.trim();
   const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
@@ -113,6 +122,8 @@ export const verifyRazorpayPayment = createServerFn({ method: "POST" })
   .validator(paymentSchema)
   .handler(async ({ data }) => {
     const { keySecret } = getRazorpayCredentials();
+    const expectedAmountPaise = COURSE_PRICE_INR * 100;
+
     const key = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(keySecret),
@@ -133,5 +144,33 @@ export const verifyRazorpayPayment = createServerFn({ method: "POST" })
       throw new Error("Razorpay payment verification failed.");
     }
 
-    return { verified: true as const };
+    const payment = (await razorpayFetch(`/payments/${encodeURIComponent(data.paymentId)}`, {
+      method: "GET",
+    })) as RazorpayPayment;
+
+    if (!payment?.id || payment.order_id !== data.orderId) {
+      throw new Error("Payment does not belong to this order.");
+    }
+
+    if (payment.currency !== "INR" || payment.amount !== expectedAmountPaise) {
+      throw new Error("Payment amount or currency does not match the order.");
+    }
+
+    if (!(payment.captured === true || payment.status === "authorized")) {
+      throw new Error(`Payment is not successful yet (status: ${payment.status}).`);
+    }
+
+    const order = (await razorpayFetch(`/orders/${encodeURIComponent(data.orderId)}`, {
+      method: "GET",
+    })) as RazorpayOrder;
+
+    if (!order?.id || order.amount !== expectedAmountPaise || order.currency !== "INR") {
+      throw new Error("Order details do not match expected course price.");
+    }
+
+    return {
+      verified: true as const,
+      orderId: data.orderId,
+      paymentId: data.paymentId,
+    };
   });
