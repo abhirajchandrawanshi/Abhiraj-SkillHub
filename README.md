@@ -111,3 +111,33 @@ Use these placeholder variable names in `.env` (see `.env.example`):
 - `VITE_FIREBASE_STORAGE_BUCKET`
 - `VITE_FIREBASE_MESSAGING_SENDER_ID`
 - `VITE_FIREBASE_APP_ID`
+
+## 60-second handoff checklist
+
+1. Clone the repo and install dependencies:
+
+```sh
+git clone <repo-url>
+cd vivid-academy-glow
+npm i
+```
+
+2. Create local env file from template:
+
+```sh
+cp .env.example .env
+```
+
+3. Fill all placeholders in `.env` with real values (never commit `.env`).
+
+4. Start development server:
+
+```sh
+npm run dev
+```
+
+5. Validate production build before opening PR:
+
+```sh
+npm run build
+```
