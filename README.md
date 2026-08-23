@@ -84,3 +84,30 @@ Never expose `RAZORPAY_KEY_SECRET` as a `VITE_*` variable or commit it to the re
 
 Restart `npm run dev` after changing `.env`. Test payments with Razorpay test cards / UPI
 (success: `ACCT-000006`). The course is currently charged at ₹1 for gateway testing.
+
+## Git ignore and secret safety
+
+The repository already excludes local secrets and generated artifacts through `.gitignore`.
+
+Ignored categories:
+
+- Local environment files: `.env`, `.env.*` (except `.env.example`)
+- Cloudflare local vars: `.dev.vars`
+- Build outputs and generated folders: `dist`, `dist-ssr`, `.output`, `.vinxi`, `.tanstack/**`, `.nitro`
+- Tooling and dependencies: `node_modules`
+- Local editor/system files: `.vscode/*` (except `.vscode/extensions.json`), `.idea`, `.DS_Store`, `*.suo`, `*.ntvs*`, `*.njsproj`, `*.sln`, `*.sw?`
+
+Before sharing the repo, keep real credentials only in local `.env` and never commit that file.
+
+## Environment placeholders
+
+Use these placeholder variable names in `.env` (see `.env.example`):
+
+- `RAZORPAY_KEY_ID`
+- `RAZORPAY_KEY_SECRET`
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
