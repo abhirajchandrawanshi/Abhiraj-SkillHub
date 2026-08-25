@@ -2,21 +2,16 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
-  CheckCircle2,
   Download,
   FileText,
-  LockKeyhole,
   LogIn,
   LogOut,
   Menu,
-  ShieldCheck,
-  ShoppingCart,
   X,
 } from "lucide-react";
 
-import { CheckoutDialog } from "@/components/CheckoutDialog";
-import { grantCourseAccess, hasCourseAccess, type CourseAccess } from "@/lib/access";
-import { COURSE_ID, COURSE_PRICE_INR, INTERNSHIP_ID, INTERNSHIP_PRICE_INR } from "@/lib/course";
+import { hasCourseAccess } from "@/lib/access";
+import { COURSE_ID, INTERNSHIP_ID } from "@/lib/course";
 import { getCourseBySlug } from "@/lib/firebase-courses";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -36,52 +31,9 @@ export const Route = createFileRoute("/")({
 });
 
 function Landing() {
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [internshipCheckoutOpen, setInternshipCheckoutOpen] = useState(false);
-  const [unlocked, setUnlocked] = useState(false);
-  const [internshipUnlocked, setInternshipUnlocked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [notice, setNotice] = useState("");
-  const [previewOpen, setPreviewOpen] = useState(false);
   const navigate = useNavigate();
   const { user, signOutUser } = useAuth();
-
-  useEffect(() => {
-    setUnlocked(hasCourseAccess(COURSE_ID));
-    setInternshipUnlocked(hasCourseAccess(INTERNSHIP_ID));
-    
-    const syncAccess = () => setUnlocked(hasCourseAccess(COURSE_ID));
-    const syncInternshipAccess = () => setInternshipUnlocked(hasCourseAccess(INTERNSHIP_ID));
-    
-    window.addEventListener("course-access-changed", syncAccess);
-    window.addEventListener("internship-access-changed", syncInternshipAccess);
-    
-    return () => {
-      window.removeEventListener("course-access-changed", syncAccess);
-      window.removeEventListener("internship-access-changed", syncInternshipAccess);
-    };
-  }, []);
-
-  const unlockPdf = (access: CourseAccess) => {
-    grantCourseAccess(access);
-    if (access.courseId === COURSE_ID) {
-      setUnlocked(true);
-      setNotice("Your Python Notes are unlocked. You can read or download them below.");
-    } else if (access.courseId === INTERNSHIP_ID) {
-      setInternshipUnlocked(true);
-      setNotice("Your Internships List is unlocked. You can read or download it below.");
-    }
-  };
-
-  const openCheckout = () => {
-    setNotice("");
-    setCheckoutOpen(true);
-  };
-
-  const openInternshipCheckout = () => {
-    setNotice("");
-    setInternshipCheckoutOpen(true);
-  };
 
   const handleAuth = () => {
     setMenuOpen(false);
@@ -93,13 +45,11 @@ function Landing() {
     setMenuOpen(false);
   };
 
-  const openPreview = () => {
-    setPreviewOpen(true);
-    window.setTimeout(() => scrollTo("reader"), 0);
-  };
-
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <div className="bg-orange-500 py-2 text-center text-sm font-semibold text-white">
+        🚧 Website is under construction - More courses coming soon!
+      </div>
       <header className="border-b border-border bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-[4.5rem] max-w-6xl items-center justify-between px-6">
           <a href="#top" className="font-display text-xl font-bold tracking-tight">
@@ -143,14 +93,6 @@ function Landing() {
             </button>
           </nav>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Open cart"
-              onClick={() => scrollTo("course")}
-            >
-              <ShoppingCart className="h-5 w-5" />
-            </Button>
             {user ? (
               <>
                 <Button variant="ghost" size="sm" onClick={() => void navigate({ to: "/" })}>
@@ -215,22 +157,13 @@ function Landing() {
                 <p className="mt-2 text-sm text-muted-foreground">
                   Well structured notes from basics to advanced
                 </p>
-                <div className="mt-5 flex items-center gap-4">
-                  <span className="font-display text-3xl font-bold text-brand-foreground">
-                    ₹{COURSE_PRICE_INR}
-                  </span>
-                  <span className="text-base text-muted-foreground line-through">₹299</span>
-                  <span className="rounded-full bg-[#eee8ff] px-3 py-1 text-xs font-bold text-brand-foreground">
-                    99% OFF
-                  </span>
-                </div>
                 <Button
                   className="mt-5 w-full"
                   size="lg"
                   variant="brand"
-                  onClick={() => (unlocked ? scrollTo("reader") : openCheckout())}
+                  onClick={() => scrollTo("reader")}
                 >
-                  {unlocked ? "Read PDF" : "Buy Now"}
+                  View Course
                 </Button>
               </div>
             </div>
@@ -285,6 +218,166 @@ function Landing() {
           </div>
         </section>
 
+        {/* DSA Course Section */}
+        <section className="border-b border-border bg-[#faf9ff]">
+          <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-12 md:grid-cols-[1fr_28rem] md:py-14">
+            <div>
+              <h1 className="max-w-xl font-display text-5xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
+                <span className="text-brand-foreground">DSA</span> Course
+              </h1>
+              <p className="mt-5 max-w-md text-xl leading-8 text-muted-foreground">
+                Data Structures and Algorithms for coding interviews
+              </p>
+              <div className="mt-8 inline-flex items-center gap-2 rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-600">
+                🚧 Coming Soon
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-xl bg-white shadow-lift">
+              <div className="flex h-52 items-center justify-center gap-5 bg-[#081525] text-white">
+                <span className="text-7xl font-bold leading-none text-[#ff7f50]">DS</span>
+                <div>
+                  <p className="font-display text-4xl font-bold">DSA</p>
+                  <p className="text-2xl font-semibold text-[#ffd343]">Course</p>
+                </div>
+              </div>
+              <div className="p-6">
+                <h2 className="font-display text-xl font-bold">Data Structures & Algorithms</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Complete DSA guide for interview preparation
+                </p>
+                <Button
+                  className="mt-5 w-full"
+                  size="lg"
+                  variant="outline"
+                  disabled
+                >
+                  Coming Soon
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* C++ Course Section */}
+        <section className="border-b border-border bg-[#faf9ff]">
+          <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-12 md:grid-cols-[1fr_28rem] md:py-14">
+            <div>
+              <h1 className="max-w-xl font-display text-5xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
+                <span className="text-brand-foreground">C++</span> Course
+              </h1>
+              <p className="mt-5 max-w-md text-xl leading-8 text-muted-foreground">
+                Master C++ programming from basics to advanced
+              </p>
+              <div className="mt-8 inline-flex items-center gap-2 rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-600">
+                🚧 Coming Soon
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-xl bg-white shadow-lift">
+              <div className="flex h-52 items-center justify-center gap-5 bg-[#081525] text-white">
+                <span className="text-7xl font-bold leading-none text-[#00599c]">C++</span>
+                <div>
+                  <p className="font-display text-4xl font-bold">C++</p>
+                  <p className="text-2xl font-semibold text-[#ffd343]">Course</p>
+                </div>
+              </div>
+              <div className="p-6">
+                <h2 className="font-display text-xl font-bold">C++ Programming</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Complete C++ guide with OOP concepts
+                </p>
+                <Button
+                  className="mt-5 w-full"
+                  size="lg"
+                  variant="outline"
+                  disabled
+                >
+                  Coming Soon
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Java Course Section */}
+        <section className="border-b border-border bg-[#faf9ff]">
+          <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-12 md:grid-cols-[1fr_28rem] md:py-14">
+            <div>
+              <h1 className="max-w-xl font-display text-5xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
+                <span className="text-brand-foreground">Java</span> Course
+              </h1>
+              <p className="mt-5 max-w-md text-xl leading-8 text-muted-foreground">
+                Learn Java programming and enterprise development
+              </p>
+              <div className="mt-8 inline-flex items-center gap-2 rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-600">
+                🚧 Coming Soon
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-xl bg-white shadow-lift">
+              <div className="flex h-52 items-center justify-center gap-5 bg-[#081525] text-white">
+                <span className="text-7xl font-bold leading-none text-[#007396]">Java</span>
+                <div>
+                  <p className="font-display text-4xl font-bold">Java</p>
+                  <p className="text-2xl font-semibold text-[#ffd343]">Course</p>
+                </div>
+              </div>
+              <div className="p-6">
+                <h2 className="font-display text-xl font-bold">Java Programming</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Complete Java guide with Spring Framework
+                </p>
+                <Button
+                  className="mt-5 w-full"
+                  size="lg"
+                  variant="outline"
+                  disabled
+                >
+                  Coming Soon
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* C Course Section */}
+        <section className="border-b border-border bg-[#faf9ff]">
+          <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-12 md:grid-cols-[1fr_28rem] md:py-14">
+            <div>
+              <h1 className="max-w-xl font-display text-5xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
+                <span className="text-brand-foreground">C</span> Programming
+              </h1>
+              <p className="mt-5 max-w-md text-xl leading-8 text-muted-foreground">
+                Master C programming fundamentals and advanced concepts
+              </p>
+              <div className="mt-8 inline-flex items-center gap-2 rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-600">
+                🚧 Coming Soon
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-xl bg-white shadow-lift">
+              <div className="flex h-52 items-center justify-center gap-5 bg-[#081525] text-white">
+                <span className="text-7xl font-bold leading-none text-[#00599c]">C</span>
+                <div>
+                  <p className="font-display text-4xl font-bold">C</p>
+                  <p className="text-2xl font-semibold text-[#ffd343]">Programming</p>
+                </div>
+              </div>
+              <div className="p-6">
+                <h2 className="font-display text-xl font-bold">C Programming</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Complete C programming guide
+                </p>
+                <Button
+                  className="mt-5 w-full"
+                  size="lg"
+                  variant="outline"
+                  disabled
+                >
+                  Coming Soon
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="about" className="border-b border-border bg-white">
           <div className="mx-auto grid max-w-6xl gap-8 px-6 py-9 sm:grid-cols-3">
             {[
@@ -306,61 +399,19 @@ function Landing() {
         </section>
 
         <section id="reader" className="mx-auto max-w-6xl scroll-mt-8 px-6 py-12">
-          {unlocked ? (
-            <div className="overflow-hidden rounded-xl border border-border bg-white shadow-soft">
-              <div className="flex items-center justify-between border-b border-border p-5">
-                <h2 className="font-display text-xl font-bold">Your Python Notes</h2>
-                <a
-                  className="flex items-center gap-2 text-sm font-semibold text-brand-foreground"
-                  href={PDF_FILE}
-                  download
-                >
-                  <Download className="h-4 w-4" /> Download
-                </a>
-              </div>
-              <iframe title={PDF_TITLE} src={PDF_FILE} className="h-[75vh] min-h-[34rem] w-full" />
+          <div className="overflow-hidden rounded-xl border border-border bg-white shadow-soft">
+            <div className="flex items-center justify-between border-b border-border p-5">
+              <h2 className="font-display text-xl font-bold">Python Notes Preview</h2>
+              <a
+                className="flex items-center gap-2 text-sm font-semibold text-brand-foreground"
+                href={PDF_FILE}
+                download
+              >
+                <Download className="h-4 w-4" /> Download
+              </a>
             </div>
-          ) : previewOpen ? (
-            <div>
-              <div className="mb-6">
-                <p className="text-sm font-semibold uppercase tracking-wide text-brand-foreground">
-                  Free preview
-                </p>
-                <h2 className="mt-1 font-display text-2xl font-bold">Explore the first 3 pages</h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Read a sample below. The remaining pages are locked.
-                </p>
-              </div>
-              <PdfPreview />
-              <div className="mt-8 rounded-xl border border-brand/30 bg-[#f4f0ff] p-8 text-center">
-                <LockKeyhole className="mx-auto h-9 w-9 text-brand-foreground" />
-                <h3 className="mt-3 font-display text-xl font-bold">
-                  Continue reading with full access
-                </h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Unlock all 10 pages for ₹{COURSE_PRICE_INR} with one secure payment.
-                </p>
-                <Button className="mt-5" size="lg" variant="brand" onClick={openCheckout}>
-                  <LockKeyhole className="h-4 w-4" /> Unlock PDF for ₹{COURSE_PRICE_INR}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="mx-auto max-w-xl py-8 text-center">
-              <LockKeyhole className="mx-auto h-10 w-10 text-brand-foreground" />
-              <h2 className="mt-4 font-display text-2xl font-bold">Your PDF is locked</h2>
-              <p className="mt-2 text-muted-foreground">
-                Click View Course to read the first 3 pages, or unlock the complete Python notes for
-                ₹{COURSE_PRICE_INR}.
-              </p>
-              <Button className="mt-6" size="lg" variant="brand" onClick={openPreview}>
-                View 3-page preview
-              </Button>
-              <p className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                <ShieldCheck className="h-3.5 w-3.5" /> Secure payment powered by Razorpay
-              </p>
-            </div>
-          )}
+            <iframe title={PDF_TITLE} src={PDF_FILE} className="h-[75vh] min-h-[34rem] w-full" />
+          </div>
         </section>
 
         <section id="internship-reader" className="mx-auto max-w-6xl scroll-mt-8 px-6 py-12">
@@ -439,23 +490,6 @@ function Landing() {
           </nav>
         </div>
       </footer>
-
-      <CheckoutDialog
-        open={checkoutOpen}
-        onOpenChange={setCheckoutOpen}
-        price={COURSE_PRICE_INR}
-        title={PDF_TITLE}
-        onPaymentSuccess={unlockPdf}
-        courseId={COURSE_ID}
-      />
-      <CheckoutDialog
-        open={internshipCheckoutOpen}
-        onOpenChange={setInternshipCheckoutOpen}
-        price={INTERNSHIP_PRICE_INR}
-        title={INTERNSHIP_TITLE}
-        onPaymentSuccess={unlockPdf}
-        courseId={INTERNSHIP_ID}
-      />
     </div>
   );
 }

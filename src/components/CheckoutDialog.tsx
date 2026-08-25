@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Loader2, Lock, ShieldCheck, CheckCircle2 } from "lucide-react";
-import { z } from "zod";
 
 import { COURSE_ID, INTERNSHIP_ID } from "@/lib/course";
 import { loadRazorpayCheckout } from "@/lib/load-razorpay";
@@ -16,16 +15,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 
-const checkoutSchema = z.object({
-  name: z.string().trim().min(2, "Enter your full name").max(100, "Name is too long"),
-  email: z.string().trim().email("Enter a valid email").max(255, "Email is too long"),
-});
 
-type Errors = Partial<Record<keyof z.infer<typeof checkoutSchema>, string>>;
 
 export function CheckoutDialog({
   open,
@@ -42,26 +34,11 @@ export function CheckoutDialog({
   onPaymentSuccess: (access: CourseAccess) => void;
   courseId?: typeof COURSE_ID | typeof INTERNSHIP_ID;
 }) {
-  const [form, setForm] = useState({ name: "", email: "" });
-  const [errors, setErrors] = useState<Errors>({});
   const [paymentError, setPaymentError] = useState("");
   const [status, setStatus] = useState<"idle" | "processing" | "done">("idle");
 
-  const set = (key: keyof typeof form) => (value: string) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
-
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const parsed = checkoutSchema.safeParse(form);
-    if (!parsed.success) {
-      const next: Errors = {};
-      for (const issue of parsed.error.issues) {
-        next[issue.path[0] as keyof Errors] = issue.message;
-      }
-      setErrors(next);
-      return;
-    }
-    setErrors({});
     setPaymentError("");
     setStatus("processing");
 
@@ -69,22 +46,24 @@ export function CheckoutDialog({
       const order = await createRazorpayOrder({
         data: {
           courseId: courseId,
-          name: parsed.data.name,
-          email: parsed.data.email,
+          name: "John Doe",
+          email: "john.doe@example.com",
         },
       });
 
       await loadRazorpayCheckout();
       if (!window.Razorpay) throw new Error("Razorpay Checkout could not be loaded.");
 
+      console.log("Opening Razorpay Checkout with order:", order.orderId);
+
       const razorpay = new window.Razorpay({
         key: order.keyId,
         amount: order.amount,
         currency: order.currency,
-        name: "Abhiraj Chandrawanshi",
+        name: "John Doe",
         description: title,
         order_id: order.orderId,
-        prefill: { name: parsed.data.name, email: parsed.data.email },
+        prefill: { name: "John Doe", email: "john.doe@example.com" },
         theme: { color: "#e85d04" },
         handler: async (response) => {
           try {
@@ -105,7 +84,7 @@ export function CheckoutDialog({
             console.log("Payment verification succeeded:", verified);
             
             const access = {
-              email: parsed.data.email.trim().toLowerCase(),
+              email: "john.doe@example.com",
               paymentId: verified.paymentId,
               orderId: verified.orderId,
               grantedAt: new Date().toISOString(),
@@ -129,7 +108,7 @@ export function CheckoutDialog({
               await sendResourceEmail({
                 data: {
                   email: access.email,
-                  name: parsed.data.name,
+                  name: "John Doe",
                   courseId: courseId,
                 },
               });
@@ -149,10 +128,16 @@ export function CheckoutDialog({
             setStatus("idle");
           }
         },
-        modal: { ondismiss: () => setStatus("idle") },
+        modal: { 
+          ondismiss: function() {
+            console.log("Razorpay modal dismissed");
+            setStatus("idle");
+          },
+        },
       });
+      
       razorpay.on("payment.failed", (payload) => {
-        console.error("Payment failed:", payload.error);
+        console.error("Payment failed event received:", payload.error);
         const reason = payload.error.description?.trim() || payload.error.reason?.trim();
         const errorCode = payload.error.code?.trim();
         setPaymentError(
@@ -162,7 +147,10 @@ export function CheckoutDialog({
         );
         setStatus("idle");
       });
+      
+      console.log("Calling razorpay.open()");
       razorpay.open();
+      console.log("razorpay.open() completed");
     } catch (error) {
       setPaymentError(error instanceof Error ? error.message : "Unable to start payment.");
       setStatus("idle");
@@ -200,23 +188,6 @@ export function CheckoutDialog({
             </DialogHeader>
 
             <div className="mt-5 space-y-4">
-              <Field
-                id="name"
-                label="Full name"
-                placeholder="Abhiraj Chandrawanshi"
-                value={form.name}
-                onChange={set("name")}
-                error={errors.name}
-              />
-              <Field
-                id="email"
-                label="Email"
-                type="email"
-                placeholder="you@example.com"
-                value={form.email}
-                onChange={set("email")}
-                error={errors.email}
-              />
               <p className="rounded-lg bg-secondary px-3 py-2 text-sm text-muted-foreground">
                 Razorpay securely handles cards, UPI, net banking, and wallets after you continue.
               </p>
@@ -259,41 +230,6 @@ export function CheckoutDialog({
         )}
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Field({
-  id,
-  label,
-  value,
-  onChange,
-  error,
-  placeholder,
-  type = "text",
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  error?: string | undefined;
-  placeholder?: string;
-  type?: string;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <div className="relative">
-        <Input
-          id={id}
-          type={type}
-          value={value}
-          placeholder={placeholder ?? ""}
-          onChange={(event) => onChange(event.target.value)}
-          aria-invalid={Boolean(error)}
-        />
-      </div>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
-    </div>
   );
 }
 
