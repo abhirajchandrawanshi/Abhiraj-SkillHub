@@ -40,7 +40,7 @@ export function CheckoutDialog({
   price: number;
   title: string;
   onPaymentSuccess: (access: CourseAccess) => void;
-  courseId?: string;
+  courseId?: typeof COURSE_ID | typeof INTERNSHIP_ID;
 }) {
   const [form, setForm] = useState({ name: "", email: "" });
   const [errors, setErrors] = useState<Errors>({});
@@ -88,11 +88,13 @@ export function CheckoutDialog({
         theme: { color: "#e85d04" },
         handler: async (response) => {
           try {
-            console.log("Payment response received:", {
+            console.log("Razorpay success handler called:", {
               orderId: response.razorpay_order_id,
               paymentId: response.razorpay_payment_id,
+              signature: response.razorpay_signature?.substring(0, 20) + "...",
             });
             
+            console.log("Calling verifyRazorpayPayment...");
             const verified = await verifyRazorpayPayment({
               data: {
                 orderId: response.razorpay_order_id,
@@ -100,6 +102,7 @@ export function CheckoutDialog({
                 signature: response.razorpay_signature,
               },
             });
+            console.log("Payment verification succeeded:", verified);
             
             const access = {
               email: parsed.data.email.trim().toLowerCase(),
@@ -140,6 +143,7 @@ export function CheckoutDialog({
             setStatus("done");
           } catch (error) {
             console.error("Payment verification error:", error);
+            console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
             const errorMessage = error instanceof Error ? error.message : "Payment could not be verified. Please contact support before trying again.";
             setPaymentError(errorMessage);
             setStatus("idle");
@@ -327,5 +331,6 @@ type RazorpayFailurePayload = {
   error: {
     description?: string;
     reason?: string;
+    code?: string;
   };
 };
