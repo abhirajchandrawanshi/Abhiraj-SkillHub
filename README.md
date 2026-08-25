@@ -1,6 +1,6 @@
 # Abhiraj Chandrawanshi Course Hub
 
-Build a modern, responsive landing page for an online course-selling platform called "Abhiraj Chandrawanshi ". The design should feel clean, professional, and trustworthy — similar to platforms like Unstop or Udemy.
+Build a modern, responsive landing page for an online course-selling platform called "Abhiraj Chandrawanshi ". The design should feel clean, professional, and trustworthy.
 
 Layout requirements:
 
@@ -43,18 +43,6 @@ Payment Integration: Add a functional checkout flow — clicking "Buy Now" shoul
 Footer: Standard footer with links (About, Contact, Terms, Privacy), social icons, and newsletter signup.
 
 Style: Use a modern SaaS aesthetic — rounded cards, soft shadows, clear typography hierarchy, generous white space, and one bold accent color for CTAs. Fully responsive for mobile and desktop.(I have attached a picture for your reference )
-
-This project was built with [Lovable](https://lovable.dev).
-
-**Live app**: https://vivid-academy-glow.lovable.app
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/2ff9fe29-7a66-4101-aaeb-49da09856a01).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
 
 ## Development
 

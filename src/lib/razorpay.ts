@@ -1,12 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { COURSE_ID, COURSE_PRICE_INR, COURSE_TITLE } from "@/lib/course";
+import { 
+  COURSE_ID, 
+  COURSE_PRICE_INR, 
+  COURSE_TITLE,
+  INTERNSHIP_ID,
+  INTERNSHIP_PRICE_INR,
+  INTERNSHIP_TITLE
+} from "@/lib/course";
 
 const RAZORPAY_API = "https://api.razorpay.com/v1";
 
 const customerSchema = z.object({
-  courseId: z.literal(COURSE_ID),
+  courseId: z.union([z.literal(COURSE_ID), z.literal(INTERNSHIP_ID)]),
   name: z.string().trim().min(2).max(100),
   email: z.string().trim().email().max(255),
 });
@@ -35,7 +42,16 @@ type RazorpayPayment = {
 function getRazorpayCredentials() {
   const keyId = process.env.RAZORPAY_KEY_ID?.trim();
   const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
+  
+  console.log("Checking Razorpay credentials:", { 
+    hasKeyId: !!keyId, 
+    hasKeySecret: !!keySecret,
+    keyIdLength: keyId?.length,
+    keySecretLength: keySecret?.length
+  });
+  
   if (!keyId || !keySecret) {
+    console.error("Missing Razorpay credentials");
     throw new Error("Razorpay is not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.");
   }
   return { keyId, keySecret };
@@ -88,41 +104,61 @@ async function razorpayFetch(path: string, init: RequestInit) {
 export const createRazorpayOrder = createServerFn({ method: "POST" })
   .validator(customerSchema)
   .handler(async ({ data }) => {
-    const { keyId } = getRazorpayCredentials();
-    const amountPaise = COURSE_PRICE_INR * 100;
+    try {
+      console.log("Creating Razorpay order for:", { courseId: data.courseId, name: data.name, email: data.email });
+      
+      const { keyId } = getRazorpayCredentials();
+      
+      // Determine price and title based on courseId
+      const amountPaise = data.courseId === COURSE_ID 
+        ? COURSE_PRICE_INR * 100 
+        : INTERNSHIP_PRICE_INR * 100;
+      
+      const courseTitle = data.courseId === COURSE_ID 
+        ? COURSE_TITLE 
+        : INTERNSHIP_TITLE;
 
-    const order = (await razorpayFetch("/orders", {
-      method: "POST",
-      body: JSON.stringify({
-        amount: amountPaise,
-        currency: "INR",
-        receipt: `course_${Date.now()}`.slice(0, 40),
-        notes: {
-          courseId: data.courseId,
-          courseTitle: COURSE_TITLE,
-          customerName: data.name,
-          customerEmail: data.email,
-        },
-      }),
-    })) as RazorpayOrder;
+      console.log("Order details:", { amountPaise, courseTitle, currency: "INR" });
 
-    if (!order?.id) {
-      throw new Error("Razorpay did not return an order id.");
+      const order = (await razorpayFetch("/orders", {
+        method: "POST",
+        body: JSON.stringify({
+          amount: amountPaise,
+          currency: "INR",
+          receipt: `${data.courseId}_${Date.now()}`.slice(0, 40),
+          notes: {
+            courseId: data.courseId,
+            courseTitle: courseTitle,
+            customerName: data.name,
+            customerEmail: data.email,
+          },
+        }),
+      })) as RazorpayOrder;
+
+      console.log("Razorpay order created:", { orderId: order.id, amount: order.amount, currency: order.currency });
+
+      if (!order?.id) {
+        throw new Error("Razorpay did not return an order id.");
+      }
+
+      return {
+        keyId,
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+      };
+    } catch (error) {
+      console.error("Error creating Razorpay order:", error);
+      throw error;
     }
-
-    return {
-      keyId,
-      orderId: order.id,
-      amount: order.amount,
-      currency: order.currency,
-    };
   });
 
 export const verifyRazorpayPayment = createServerFn({ method: "POST" })
   .validator(paymentSchema)
   .handler(async ({ data }) => {
     const { keySecret } = getRazorpayCredentials();
-    const expectedAmountPaise = COURSE_PRICE_INR * 100;
+
+    console.log("Verifying payment:", { orderId: data.orderId, paymentId: data.paymentId });
 
     const key = await crypto.subtle.importKey(
       "raw",
@@ -140,34 +176,67 @@ export const verifyRazorpayPayment = createServerFn({ method: "POST" })
       byte.toString(16).padStart(2, "0"),
     ).join("");
 
+    console.log("Signature verification:", { 
+      expected: expectedSignature.substring(0, 10) + "...", 
+      received: data.signature.substring(0, 10) + "..." 
+    });
+
     if (expectedSignature !== data.signature) {
-      throw new Error("Razorpay payment verification failed.");
+      console.error("Signature mismatch:", { expected: expectedSignature, received: data.signature });
+      throw new Error("Payment signature verification failed. Please contact support.");
     }
 
     const payment = (await razorpayFetch(`/payments/${encodeURIComponent(data.paymentId)}`, {
       method: "GET",
     })) as RazorpayPayment;
 
+    console.log("Payment details:", { 
+      id: payment.id, 
+      order_id: payment.order_id, 
+      amount: payment.amount, 
+      currency: payment.currency, 
+      status: payment.status,
+      captured: payment.captured 
+    });
+
     if (!payment?.id || payment.order_id !== data.orderId) {
       throw new Error("Payment does not belong to this order.");
     }
 
-    if (payment.currency !== "INR" || payment.amount !== expectedAmountPaise) {
-      throw new Error("Payment amount or currency does not match the order.");
+    if (payment.currency !== "INR") {
+      throw new Error(`Payment currency mismatch. Expected: INR, Got: ${payment.currency}`);
+    }
+
+    // Validate amount matches either course or internship price
+    const validAmounts = [COURSE_PRICE_INR * 100, INTERNSHIP_PRICE_INR * 100];
+    if (!validAmounts.includes(payment.amount)) {
+      throw new Error(`Payment amount mismatch. Expected: ₹${COURSE_PRICE_INR} or ₹${INTERNSHIP_PRICE_INR}, Got: ₹${payment.amount / 100}`);
     }
 
     if (!(payment.captured === true || payment.status === "authorized")) {
-      throw new Error(`Payment is not successful yet (status: ${payment.status}).`);
+      throw new Error(`Payment is not successful yet (status: ${payment.status}, captured: ${payment.captured}). Please wait a few moments and try again.`);
     }
 
     const order = (await razorpayFetch(`/orders/${encodeURIComponent(data.orderId)}`, {
       method: "GET",
     })) as RazorpayOrder;
 
-    if (!order?.id || order.amount !== expectedAmountPaise || order.currency !== "INR") {
-      throw new Error("Order details do not match expected course price.");
+    console.log("Order details:", { 
+      id: order.id, 
+      amount: order.amount, 
+      currency: order.currency 
+    });
+
+    if (!order?.id || order.currency !== "INR") {
+      throw new Error("Order details do not match expected values.");
     }
 
+    // Validate order amount matches payment amount
+    if (order.amount !== payment.amount) {
+      throw new Error("Order amount does not match payment amount.");
+    }
+
+    console.log("Payment verified successfully");
     return {
       verified: true as const,
       orderId: data.orderId,

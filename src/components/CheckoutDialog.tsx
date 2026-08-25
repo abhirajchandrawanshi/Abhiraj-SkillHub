@@ -2,10 +2,12 @@ import { useState } from "react";
 import { Loader2, Lock, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { z } from "zod";
 
-import { COURSE_ID } from "@/lib/course";
+import { COURSE_ID, INTERNSHIP_ID } from "@/lib/course";
 import { loadRazorpayCheckout } from "@/lib/load-razorpay";
 import { createRazorpayOrder, verifyRazorpayPayment } from "@/lib/razorpay";
+import { sendResourceEmail } from "@/lib/brevo";
 import type { CourseAccess } from "@/lib/access";
+import { grantFirestoreAccess, grantCourseAccess } from "@/lib/access";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,12 +33,14 @@ export function CheckoutDialog({
   price,
   title,
   onPaymentSuccess,
+  courseId = COURSE_ID,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   price: number;
   title: string;
   onPaymentSuccess: (access: CourseAccess) => void;
+  courseId?: string;
 }) {
   const [form, setForm] = useState({ name: "", email: "" });
   const [errors, setErrors] = useState<Errors>({});
@@ -64,7 +68,7 @@ export function CheckoutDialog({
     try {
       const order = await createRazorpayOrder({
         data: {
-          courseId: COURSE_ID,
+          courseId: courseId,
           name: parsed.data.name,
           email: parsed.data.email,
         },
@@ -84,6 +88,11 @@ export function CheckoutDialog({
         theme: { color: "#e85d04" },
         handler: async (response) => {
           try {
+            console.log("Payment response received:", {
+              orderId: response.razorpay_order_id,
+              paymentId: response.razorpay_payment_id,
+            });
+            
             const verified = await verifyRazorpayPayment({
               data: {
                 orderId: response.razorpay_order_id,
@@ -91,27 +100,60 @@ export function CheckoutDialog({
                 signature: response.razorpay_signature,
               },
             });
-            onPaymentSuccess({
+            
+            const access = {
               email: parsed.data.email.trim().toLowerCase(),
               paymentId: verified.paymentId,
               orderId: verified.orderId,
               grantedAt: new Date().toISOString(),
-            });
+              courseId: courseId,
+            };
+            
+            console.log("Granting access to:", access.email, "for course:", courseId);
+            
+            // Save to Firestore
+            try {
+              await grantFirestoreAccess(access, courseId);
+            } catch (firestoreError) {
+              console.error("Firestore access grant failed, using localStorage fallback:", firestoreError);
+              // Fallback to localStorage if Firestore fails
+              grantCourseAccess(access);
+            }
+            
+            // Send resource email via Brevo
+            try {
+              console.log("Sending resource email to:", access.email);
+              await sendResourceEmail({
+                data: {
+                  email: access.email,
+                  name: parsed.data.name,
+                  courseId: courseId,
+                },
+              });
+              console.log("Resource email sent successfully");
+            } catch (emailError) {
+              console.error("Failed to send resource email:", emailError);
+              // Don't fail the payment flow if email sending fails
+            }
+            
+            onPaymentSuccess(access);
             setStatus("done");
-          } catch {
-            setPaymentError(
-              "Payment could not be verified. Please contact support before trying again.",
-            );
+          } catch (error) {
+            console.error("Payment verification error:", error);
+            const errorMessage = error instanceof Error ? error.message : "Payment could not be verified. Please contact support before trying again.";
+            setPaymentError(errorMessage);
             setStatus("idle");
           }
         },
         modal: { ondismiss: () => setStatus("idle") },
       });
       razorpay.on("payment.failed", (payload) => {
+        console.error("Payment failed:", payload.error);
         const reason = payload.error.description?.trim() || payload.error.reason?.trim();
+        const errorCode = payload.error.code?.trim();
         setPaymentError(
           reason
-            ? `Payment failed: ${reason}`
+            ? `Payment failed: ${reason} ${errorCode ? `(${errorCode})` : ""}`
             : "Payment failed. No amount was charged. Please try again.",
         );
         setStatus("idle");

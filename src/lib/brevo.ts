@@ -1,0 +1,223 @@
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+
+import { COURSE_ID, INTERNSHIP_ID, COURSE_TITLE, INTERNSHIP_TITLE } from "@/lib/course";
+
+const emailSchema = z.object({
+  to: z.string().email(),
+  subject: z.string(),
+  html: z.string(),
+});
+
+function getBrevoApiKey() {
+  const apiKey = process.env.BREVO_API_KEY?.trim();
+  if (!apiKey) {
+    console.warn("Brevo API key not configured. Email sending will be skipped.");
+    return null;
+  }
+  return apiKey;
+}
+
+function getWebsiteUrl() {
+  const websiteUrl = process.env.WEBSITE_URL?.trim() || "http://localhost:5174";
+  return websiteUrl;
+}
+
+async function sendEmail(to: string, subject: string, html: string) {
+  const apiKey = getBrevoApiKey();
+  if (!apiKey) {
+    console.log("Email sending skipped - BREVO_API_KEY not configured");
+    return { success: false, reason: "API key not configured" };
+  }
+
+  try {
+    console.log("Sending email to:", to, "with subject:", subject);
+
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api-key": apiKey,
+      },
+      body: JSON.stringify({
+        sender: {
+          name: "Abhiraj SkillsUp",
+          email: "abhirajvermen1@gmail.com",
+        },
+        to: [
+          {
+            email: to,
+          },
+        ],
+        subject: subject,
+        htmlContent: html,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error("Brevo API error:", result);
+      return { success: false, error: result };
+    }
+
+    console.log("Email sent successfully via Brevo:", result);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error("Error sending email via Brevo:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+function createCourseEmailTemplate(userEmail: string, userName: string) {
+  const subject = `🎉 Your Python Notes - Access Granted!`;
+  const websiteUrl = getWebsiteUrl();
+  const pdfUrl = `${websiteUrl}/python-interview-questions.pdf`;
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Python Notes Access</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .button { display: inline-block; padding: 15px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>🎉 Payment Successful!</h1>
+          <p>Your Python Notes are now unlocked</p>
+        </div>
+        <div class="content">
+          <p>Hi ${userName},</p>
+          <p>Thank you for your purchase! Your payment for <strong>Python Notes</strong> has been successfully processed.</p>
+          
+          <h2>📚 What You Get:</h2>
+          <ul>
+            <li>Complete Python Notes from basics to advanced</li>
+            <li>Well-structured content for easy learning</li>
+            <li>Lifetime access to all materials</li>
+            <li>Downloadable PDF format</li>
+          </ul>
+          
+          <p>You can access your Python Notes PDF directly here:</p>
+          <a href="${pdfUrl}" class="button">Download Python Notes PDF</a>
+          
+          <p><strong>Login Details:</strong></p>
+          <p>Email: ${userEmail}</p>
+          
+          <p>If you have any questions or need assistance, feel free to reach out to our support team.</p>
+          
+          <p>Happy learning! 🚀</p>
+          
+          <div class="footer">
+            <p>© 2026 Abhiraj Courses. All rights reserved.</p>
+            <p>This is an automated email, please do not reply.</p>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return { subject, html };
+}
+
+function createInternshipEmailTemplate(userEmail: string, userName: string) {
+  const subject = `🎉 Your 100+ Paid Internships List - Access Granted!`;
+  const internshipSheetUrl = "https://docs.google.com/spreadsheets/d/14YFhJa9aGHbBhCmY2cI5YtOGs3NBO1n3DT0fTVwc_DM/edit?usp=drivesdk";
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Internships List Access</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .button { display: inline-block; padding: 15px 30px; background: #f5576c; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>🎉 Payment Successful!</h1>
+          <p>Your 100+ Paid Internships List is now unlocked</p>
+        </div>
+        <div class="content">
+          <p>Hi ${userName},</p>
+          <p>Thank you for your purchase! Your payment for <strong>100+ Paid Internships</strong> has been successfully processed.</p>
+          
+          <h2>💼 What You Get:</h2>
+          <ul>
+            <li>Curated list of 100+ paid internship opportunities</li>
+            <li>Company details and contact information</li>
+            <li>Stipend information for each position</li>
+            <li>Direct application links</li>
+            <li>Regular updates with new opportunities</li>
+          </ul>
+          
+          <p>You can access the complete internships list directly here:</p>
+          <a href="${internshipSheetUrl}" class="button">Access Internships List (Google Sheets)</a>
+          
+          <p><strong>Login Details:</strong></p>
+          <p>Email: ${userEmail}</p>
+          
+          <p>Featured opportunities include positions at companies like Faabit Designs, Nsse Fab, DeepThought CultureTech, and many more!</p>
+          
+          <p>If you have any questions or need assistance, feel free to reach out to our support team.</p>
+          
+          <p>Best of luck with your applications! 🚀</p>
+          
+          <div class="footer">
+            <p>© 2026 Abhiraj Courses. All rights reserved.</p>
+            <p>This is an automated email, please do not reply.</p>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return { subject, html };
+}
+
+export const sendResourceEmail = createServerFn({ method: "POST" })
+  .validator(z.object({
+    email: z.string().email(),
+    name: z.string(),
+    courseId: z.string(),
+  }))
+  .handler(async ({ data }) => {
+    console.log("Preparing to send resource email via Brevo:", { email: data.email, courseId: data.courseId });
+    
+    let emailTemplate;
+    
+    if (data.courseId === COURSE_ID) {
+      emailTemplate = createCourseEmailTemplate(data.email, data.name);
+    } else if (data.courseId === INTERNSHIP_ID) {
+      emailTemplate = createInternshipEmailTemplate(data.email, data.name);
+    } else {
+      console.error("Unknown courseId:", data.courseId);
+      return { success: false, error: "Unknown course ID" };
+    }
+
+    const result = await sendEmail(data.email, emailTemplate.subject, emailTemplate.html);
+    return result;
+  });

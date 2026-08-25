@@ -11,18 +11,19 @@ import {
   Menu,
   ShieldCheck,
   ShoppingCart,
-  Unlock,
   X,
 } from "lucide-react";
 
 import { CheckoutDialog } from "@/components/CheckoutDialog";
 import { grantCourseAccess, hasCourseAccess, type CourseAccess } from "@/lib/access";
-import { COURSE_PRICE_INR } from "@/lib/course";
+import { COURSE_ID, COURSE_PRICE_INR, INTERNSHIP_ID, INTERNSHIP_PRICE_INR } from "@/lib/course";
+import { getCourseBySlug } from "@/lib/firebase-courses";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 
 const PDF_TITLE = "Python Notes";
 const PDF_FILE = "/python-interview-questions.pdf";
+const INTERNSHIP_TITLE = "100+ Paid Internships";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -36,7 +37,9 @@ export const Route = createFileRoute("/")({
 
 function Landing() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [internshipCheckoutOpen, setInternshipCheckoutOpen] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
+  const [internshipUnlocked, setInternshipUnlocked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -44,21 +47,40 @@ function Landing() {
   const { user, signOutUser } = useAuth();
 
   useEffect(() => {
-    setUnlocked(hasCourseAccess());
-    const syncAccess = () => setUnlocked(hasCourseAccess());
+    setUnlocked(hasCourseAccess(COURSE_ID));
+    setInternshipUnlocked(hasCourseAccess(INTERNSHIP_ID));
+    
+    const syncAccess = () => setUnlocked(hasCourseAccess(COURSE_ID));
+    const syncInternshipAccess = () => setInternshipUnlocked(hasCourseAccess(INTERNSHIP_ID));
+    
     window.addEventListener("course-access-changed", syncAccess);
-    return () => window.removeEventListener("course-access-changed", syncAccess);
+    window.addEventListener("internship-access-changed", syncInternshipAccess);
+    
+    return () => {
+      window.removeEventListener("course-access-changed", syncAccess);
+      window.removeEventListener("internship-access-changed", syncInternshipAccess);
+    };
   }, []);
 
   const unlockPdf = (access: CourseAccess) => {
     grantCourseAccess(access);
-    setUnlocked(true);
-    setNotice("Your Python Notes are unlocked. You can read or download them below.");
+    if (access.courseId === COURSE_ID) {
+      setUnlocked(true);
+      setNotice("Your Python Notes are unlocked. You can read or download them below.");
+    } else if (access.courseId === INTERNSHIP_ID) {
+      setInternshipUnlocked(true);
+      setNotice("Your Internships List is unlocked. You can read or download it below.");
+    }
   };
 
   const openCheckout = () => {
     setNotice("");
     setCheckoutOpen(true);
+  };
+
+  const openInternshipCheckout = () => {
+    setNotice("");
+    setInternshipCheckoutOpen(true);
   };
 
   const handleAuth = () => {
@@ -97,6 +119,13 @@ function Landing() {
               className="text-muted-foreground hover:text-foreground"
             >
               Courses
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTo("internships")}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Internships
             </button>
             <button
               type="button"
@@ -149,38 +178,6 @@ function Landing() {
             </Button>
           </div>
         </div>
-        {menuOpen ? (
-          <nav className="grid gap-1 border-t border-border px-6 py-3 md:hidden">
-            <button
-              type="button"
-              onClick={() => scrollTo("top")}
-              className="px-2 py-2 text-left text-sm font-medium"
-            >
-              Home
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollTo("course")}
-              className="px-2 py-2 text-left text-sm font-medium"
-            >
-              Courses
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollTo("about")}
-              className="px-2 py-2 text-left text-sm font-medium"
-            >
-              About
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollTo("contact")}
-              className="px-2 py-2 text-left text-sm font-medium"
-            >
-              Contact
-            </button>
-          </nav>
-        ) : null}
       </header>
 
       <main id="top">
@@ -234,6 +231,54 @@ function Landing() {
                   onClick={() => (unlocked ? scrollTo("reader") : openCheckout())}
                 >
                   {unlocked ? "Read PDF" : "Buy Now"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="border-b border-border bg-[#faf9ff]">
+          <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-12 md:grid-cols-[1fr_28rem] md:py-14">
+            <div>
+              <h1 className="max-w-xl font-display text-5xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
+                <span className="text-brand-foreground">100+ Paid</span> Internships
+              </h1>
+              <p className="mt-5 max-w-md text-xl leading-8 text-muted-foreground">
+                Curated list of paid internship opportunities in top companies
+              </p>
+              <Button className="mt-8" size="lg" variant="brand" onClick={() => scrollTo("internships")}>
+                View Internships
+              </Button>
+            </div>
+            <div id="internships" className="overflow-hidden rounded-xl bg-white shadow-lift">
+              <div className="flex h-52 items-center justify-center gap-5 bg-[#081525] text-white">
+                <span className="text-7xl font-bold leading-none text-[#3776ab]">💼</span>
+                <div>
+                  <p className="font-display text-4xl font-bold">Internships</p>
+                  <p className="text-2xl font-semibold text-[#ffd343]">100+ Paid</p>
+                </div>
+              </div>
+              <div className="p-6">
+                <h2 className="font-display text-xl font-bold">100+ Paid Internships List</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Complete list with company details, stipend, and application links
+                </p>
+                <div className="mt-5 flex items-center gap-4">
+                  <span className="font-display text-3xl font-bold text-brand-foreground">
+                    ₹{INTERNSHIP_PRICE_INR}
+                  </span>
+                  <span className="text-base text-muted-foreground line-through">₹199</span>
+                  <span className="rounded-full bg-[#eee8ff] px-3 py-1 text-xs font-bold text-brand-foreground">
+                    99% OFF
+                  </span>
+                </div>
+                <Button
+                  className="mt-5 w-full"
+                  size="lg"
+                  variant="brand"
+                  onClick={() => (internshipUnlocked ? scrollTo("internship-reader") : openInternshipCheckout())}
+                >
+                  {internshipUnlocked ? "Read List" : "Buy Now"}
                 </Button>
               </div>
             </div>
@@ -317,6 +362,62 @@ function Landing() {
             </div>
           )}
         </section>
+
+        <section id="internship-reader" className="mx-auto max-w-6xl scroll-mt-8 px-6 py-12">
+          {internshipUnlocked ? (
+            <div className="overflow-hidden rounded-xl border border-border bg-white shadow-soft">
+              <div className="flex items-center justify-between border-b border-border p-5">
+                <h2 className="font-display text-xl font-bold">Your Internships List</h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open('https://docs.google.com/spreadsheets/d/14YFhJa9aGHbBhCmY2cI5YtOGs3NBO1n3DT0fTVwc_DM/edit?usp=drivesdk', '_blank')}
+                >
+                  <Download className="h-4 w-4 mr-2" /> Open in Google Sheets
+                </Button>
+              </div>
+              <div className="p-8">
+                <div className="mb-6">
+                  <h3 className="font-display text-2xl font-bold mb-4">100+ Paid Internships</h3>
+                  <p className="text-muted-foreground mb-6">
+                    Complete list of paid internship opportunities from top companies. Click the button below to access the Google Sheets with all details.
+                  </p>
+                  <Button 
+                    size="lg" 
+                    variant="brand" 
+                    onClick={() => window.open('https://docs.google.com/spreadsheets/d/14YFhJa9aGHbBhCmY2cI5YtOGs3NBO1n3DT0fTVwc_DM/edit?usp=drivesdk', '_blank')}
+                  >
+                    <ShoppingCart className="h-4 w-4 mr-2" /> Access Internships List
+                  </Button>
+                </div>
+                <div className="rounded-lg bg-secondary/40 p-6">
+                  <h4 className="font-semibold mb-3">Featured Internships:</h4>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li>• Faabit Designs Pvt Ltd - Full Stack Developer - ₹5,000–10,000/month</li>
+                    <li>• Nsse Fab - Azure & ASP.NET Core Support Engineer - ₹6,000–8,000/month</li>
+                    <li>• DeepThought CultureTech Ventures - Full Stack Development (AI Platform) - ₹5,000–8,000/month</li>
+                    <li>• EmpowerU (Promorph Solutions) - Backend Developer - ₹3,000–5,000/month</li>
+                    <li>• Assetcues Solutions Pvt Ltd - .NET Developer - ₹7,000–10,000/month</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="mx-auto max-w-xl py-8 text-center">
+              <LockKeyhole className="mx-auto h-10 w-10 text-brand-foreground" />
+              <h2 className="mt-4 font-display text-2xl font-bold">Your Internships List is locked</h2>
+              <p className="mt-2 text-muted-foreground">
+                Unlock the complete list of 100+ paid internships for ₹{INTERNSHIP_PRICE_INR}.
+              </p>
+              <Button className="mt-6" size="lg" variant="brand" onClick={openInternshipCheckout}>
+                <LockKeyhole className="h-4 w-4" /> Unlock for ₹{INTERNSHIP_PRICE_INR}
+              </Button>
+              <p className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                <ShieldCheck className="h-3.5 w-3.5" /> Secure payment powered by Razorpay
+              </p>
+            </div>
+          )}
+        </section>
       </main>
 
       <footer id="contact" className="border-t border-border bg-white">
@@ -345,6 +446,15 @@ function Landing() {
         price={COURSE_PRICE_INR}
         title={PDF_TITLE}
         onPaymentSuccess={unlockPdf}
+        courseId={COURSE_ID}
+      />
+      <CheckoutDialog
+        open={internshipCheckoutOpen}
+        onOpenChange={setInternshipCheckoutOpen}
+        price={INTERNSHIP_PRICE_INR}
+        title={INTERNSHIP_TITLE}
+        onPaymentSuccess={unlockPdf}
+        courseId={INTERNSHIP_ID}
       />
     </div>
   );
