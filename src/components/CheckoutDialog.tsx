@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, Lock, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { Loader2, Lock, ShieldCheck, CheckCircle2, Mail } from "lucide-react";
 
 import { COURSE_ID, INTERNSHIP_ID } from "@/lib/course";
 import { loadRazorpayCheckout } from "@/lib/load-razorpay";
@@ -8,6 +8,8 @@ import { sendResourceEmail } from "@/lib/brevo";
 import type { CourseAccess } from "@/lib/access";
 import { grantFirestoreAccess, grantCourseAccess } from "@/lib/access";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -35,19 +37,41 @@ export function CheckoutDialog({
   courseId?: typeof COURSE_ID | typeof INTERNSHIP_ID;
 }) {
   const [paymentError, setPaymentError] = useState("");
+  const [emailStatus, setEmailStatus] = useState<"none" | "sending" | "success" | "failed">("none");
+  const [emailError, setEmailError] = useState("");
+  const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "processing" | "done">("idle");
+
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    
+    // Validate email - it's now required
+    if (!email) {
+      setEmailError("Please enter your email address to receive the resources");
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setEmailError("Please enter a valid email address");
+      return;
+    }
+    setEmailError("");
+    
     setPaymentError("");
     setStatus("processing");
 
     try {
+      const userName = email.split('@')[0] || "Guest";
+      const userEmail = email;
+
       const order = await createRazorpayOrder({
         data: {
           courseId: courseId,
-          name: "John Doe",
-          email: "john.doe@example.com",
+          name: userName,
+          email: userEmail,
         },
       });
 
@@ -60,10 +84,15 @@ export function CheckoutDialog({
         key: order.keyId,
         amount: order.amount,
         currency: order.currency,
-        name: "John Doe",
+        name: userName,
         description: title,
         order_id: order.orderId,
-        prefill: { name: "John Doe", email: "john.doe@example.com" },
+        modal: {
+          ondismiss: function() {
+            console.log("Razorpay modal dismissed");
+            setStatus("idle");
+          },
+        },
         theme: { color: "#e85d04" },
         handler: async (response) => {
           try {
@@ -83,8 +112,12 @@ export function CheckoutDialog({
             });
             console.log("Payment verification succeeded:", verified);
             
+            // Use the email from the form (user-provided) since Razorpay doesn't reliably return it
+            const finalEmail = userEmail;
+            const finalUserName = userName;
+            
             const access = {
-              email: "john.doe@example.com",
+              email: finalEmail,
               paymentId: verified.paymentId,
               orderId: verified.orderId,
               grantedAt: new Date().toISOString(),
@@ -102,20 +135,33 @@ export function CheckoutDialog({
               grantCourseAccess(access);
             }
             
-            // Send resource email via Brevo
-            try {
-              console.log("Sending resource email to:", access.email);
-              await sendResourceEmail({
-                data: {
-                  email: access.email,
-                  name: "John Doe",
-                  courseId: courseId,
-                },
-              });
-              console.log("Resource email sent successfully");
-            } catch (emailError) {
-              console.error("Failed to send resource email:", emailError);
-              // Don't fail the payment flow if email sending fails
+            // Send resource email via Brevo (if email was provided)
+            if (finalEmail) {
+              try {
+                setEmailStatus("sending");
+                console.log("Sending resource email to:", finalEmail);
+                const emailResult = await sendResourceEmail({
+                  data: {
+                    email: finalEmail,
+                    name: finalUserName,
+                    courseId: courseId,
+                  },
+                });
+                
+                if (emailResult.success) {
+                  setEmailStatus("success");
+                  console.log("Resource email sent successfully");
+                } else {
+                  setEmailStatus("failed");
+                  setEmailError(emailResult.error || "Unknown error");
+                  console.error("Failed to send resource email:", emailResult.error);
+                }
+              } catch (emailError) {
+                setEmailStatus("failed");
+                setEmailError(emailError instanceof Error ? emailError.message : "Unknown error");
+                console.error("Failed to send resource email:", emailError);
+                // Don't fail the payment flow if email sending fails
+              }
             }
             
             onPaymentSuccess(access);
@@ -127,12 +173,6 @@ export function CheckoutDialog({
             setPaymentError(errorMessage);
             setStatus("idle");
           }
-        },
-        modal: { 
-          ondismiss: function() {
-            console.log("Razorpay modal dismissed");
-            setStatus("idle");
-          },
         },
       });
       
@@ -163,6 +203,9 @@ export function CheckoutDialog({
       window.setTimeout(() => {
         setStatus("idle");
         setPaymentError("");
+        setEmailStatus("none");
+        setEmailError("");
+        setEmail("");
       }, 200);
   };
 
@@ -176,8 +219,26 @@ export function CheckoutDialog({
             <DialogDescription className="mt-2">
               Your payment is verified. The complete PDF is now unlocked.
             </DialogDescription>
+            
+            {emailStatus === "success" && (
+              <p className="mt-4 text-sm text-green-600 font-medium">
+                ✓ Resource email sent successfully!
+              </p>
+            )}
+            
+            {emailStatus === "failed" && (
+              <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                <p className="text-sm text-orange-800 font-medium">
+                  ⚠️ Email sending failed
+                </p>
+                <p className="text-xs text-orange-600 mt-1">
+                  {emailError || "Please contact support for resources"}
+                </p>
+              </div>
+            )}
+            
             <Button className="mt-6 w-full" size="lg" onClick={() => close(false)}>
-              Read the PDF
+              Access Now
             </Button>
           </div>
         ) : (
@@ -188,8 +249,29 @@ export function CheckoutDialog({
             </DialogHeader>
 
             <div className="mt-5 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="flex items-center gap-2">
+                  <Mail className="h-4 w-4" />
+                  Email address <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full"
+                  required
+                />
+                {emailError && (
+                  <p className="text-xs text-destructive">{emailError}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Resources will be sent to this email after successful payment
+                </p>
+              </div>
               <p className="rounded-lg bg-secondary px-3 py-2 text-sm text-muted-foreground">
-                Razorpay securely handles cards, UPI, net banking, and wallets after you continue.
+                Razorpay securely handles cards, UPI, net banking, and wallets.
               </p>
             </div>
 
@@ -246,10 +328,10 @@ type RazorpayOptions = {
   name: string;
   description: string;
   order_id: string;
-  prefill: { name: string; email: string };
+  prefill?: { name?: string; email?: string; contact?: string };
   theme: { color: string };
   handler: (response: RazorpayResponse) => void;
-  modal: { ondismiss: () => void };
+  modal?: { ondismiss: () => void };
 };
 
 type RazorpayResponse = {

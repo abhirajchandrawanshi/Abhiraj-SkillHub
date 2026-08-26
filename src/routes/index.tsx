@@ -1,30 +1,29 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   BookOpen,
   Download,
   FileText,
+  LockKeyhole,
   LogIn,
   LogOut,
   Menu,
   X,
 } from "lucide-react";
 
-import { hasCourseAccess } from "@/lib/access";
-import { COURSE_ID, INTERNSHIP_ID } from "@/lib/course";
-import { getCourseBySlug } from "@/lib/firebase-courses";
+import { INTERNSHIP_ID, INTERNSHIP_PRICE_INR } from "@/lib/course";
 import { Button } from "@/components/ui/button";
+import { CheckoutDialog } from "@/components/CheckoutDialog";
 import { useAuth } from "@/hooks/use-auth";
+import type { CourseAccess } from "@/lib/access";
 
-const PDF_TITLE = "Python Notes";
-const PDF_FILE = "/python-interview-questions.pdf";
-const INTERNSHIP_TITLE = "100+ Paid Internships";
+const SITE_TITLE = "Abhiraj Courses";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: `${PDF_TITLE} | Abhiraj Chandrawanshi` },
-      { name: "description", content: "Complete Python notes for beginners to advanced learners." },
+      { title: `${SITE_TITLE} | Abhiraj Chandrawanshi` },
+      { name: "description", content: "Learn programming with our comprehensive courses - Python, DSA, C++, Java, and more." },
     ],
   }),
   component: Landing,
@@ -34,6 +33,8 @@ function Landing() {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const { user, signOutUser } = useAuth();
+  const [internshipUnlocked, setInternshipUnlocked] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   const handleAuth = () => {
     setMenuOpen(false);
@@ -43,6 +44,28 @@ function Landing() {
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
     setMenuOpen(false);
+  };
+
+  const handleInternshipAccess = () => {
+    if (internshipUnlocked) {
+      window.open('https://docs.google.com/spreadsheets/d/14YFhJa9aGHbBhCmY2cI5YtOGs3NBO1n3DT0fTVwc_DM/edit?usp=drivesdk', '_blank');
+    } else {
+      setCheckoutOpen(true);
+    }
+  };
+
+  const handlePaymentSuccess = (access: CourseAccess) => {
+    setInternshipUnlocked(true);
+    setCheckoutOpen(false);
+  };
+
+  const renderInternshipButton = (text: string) => {
+    return (
+      <span>
+        {text}
+        {!internshipUnlocked && <LockKeyhole className="h-4 w-4 ml-2" />}
+      </span>
+    );
   };
 
   return (
@@ -62,13 +85,6 @@ function Landing() {
               className="border-b-2 border-brand-foreground py-5 text-brand-foreground"
             >
               Home
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollTo("course")}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Courses
             </button>
             <button
               type="button"
@@ -123,54 +139,8 @@ function Landing() {
       </header>
 
       <main id="top">
-        {notice ? (
-          <div
-            role="status"
-            className="border-b border-brand/30 bg-[#f4f0ff] px-6 py-3 text-center text-sm font-medium text-brand-foreground"
-          >
-            {notice}
-          </div>
-        ) : null}
-        <section className="border-b border-border bg-[#faf9ff]">
-          <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-12 md:grid-cols-[1fr_28rem] md:py-14">
-            <div>
-              <h1 className="max-w-xl font-display text-5xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
-                <span className="text-brand-foreground">Python</span> Notes
-              </h1>
-              <p className="mt-5 max-w-md text-xl leading-8 text-muted-foreground">
-                Complete Python Notes for Beginners to Advanced
-              </p>
-              <Button className="mt-8" size="lg" variant="brand" onClick={openPreview}>
-                View Course
-              </Button>
-            </div>
-            <div id="course" className="overflow-hidden rounded-xl bg-white shadow-lift">
-              <div className="flex h-52 items-center justify-center gap-5 bg-[#081525] text-white">
-                <span className="text-7xl font-bold leading-none text-[#3776ab]">Py</span>
-                <div>
-                  <p className="font-display text-4xl font-bold">Python</p>
-                  <p className="text-2xl font-semibold text-[#ffd343]">Notes</p>
-                </div>
-              </div>
-              <div className="p-6">
-                <h2 className="font-display text-xl font-bold">Python Complete Notes</h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Well structured notes from basics to advanced
-                </p>
-                <Button
-                  className="mt-5 w-full"
-                  size="lg"
-                  variant="brand"
-                  onClick={() => scrollTo("reader")}
-                >
-                  View Course
-                </Button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="border-b border-border bg-[#faf9ff]">
+        {/* 100+ Paid Internships Section - MOVED TO TOP */}
+        <section id="internships" className="border-b border-border bg-[#faf9ff]">
           <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-12 md:grid-cols-[1fr_28rem] md:py-14">
             <div>
               <h1 className="max-w-xl font-display text-5xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
@@ -179,11 +149,17 @@ function Landing() {
               <p className="mt-5 max-w-md text-xl leading-8 text-muted-foreground">
                 Curated list of paid internship opportunities in top companies
               </p>
-              <Button className="mt-8" size="lg" variant="brand" onClick={() => scrollTo("internships")}>
-                View Internships
+              <Button 
+                className="mt-8" 
+                size="lg" 
+                variant="brand"
+                style={internshipUnlocked ? { backgroundColor: "#22c55e", color: "white" } : undefined}
+                onClick={handleInternshipAccess}
+              >
+                {renderInternshipButton(internshipUnlocked ? "Access Now" : "Buy Now")}
               </Button>
             </div>
-            <div id="internships" className="overflow-hidden rounded-xl bg-white shadow-lift">
+            <div className="overflow-hidden rounded-xl bg-white shadow-lift">
               <div className="flex h-52 items-center justify-center gap-5 bg-[#081525] text-white">
                 <span className="text-7xl font-bold leading-none text-[#3776ab]">💼</span>
                 <div>
@@ -209,9 +185,50 @@ function Landing() {
                   className="mt-5 w-full"
                   size="lg"
                   variant="brand"
-                  onClick={() => (internshipUnlocked ? scrollTo("internship-reader") : openInternshipCheckout())}
+                  style={internshipUnlocked ? { backgroundColor: "#22c55e", color: "white" } : {}}
+                  onClick={handleInternshipAccess}
                 >
-                  {internshipUnlocked ? "Read List" : "Buy Now"}
+                  {renderInternshipButton(internshipUnlocked ? "Access" : "Buy Now")}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Python Course Section - CHANGED TO COMING SOON */}
+        <section className="border-b border-border bg-[#faf9ff]">
+          <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-12 md:grid-cols-[1fr_28rem] md:py-14">
+            <div>
+              <h1 className="max-w-xl font-display text-5xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
+                <span className="text-brand-foreground">Python</span> Notes
+              </h1>
+              <p className="mt-5 max-w-md text-xl leading-8 text-muted-foreground">
+                Complete Python Notes for Beginners to Advanced
+              </p>
+              <div className="mt-8 inline-flex items-center gap-2 rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-600">
+                🚧 Coming Soon
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-xl bg-white shadow-lift">
+              <div className="flex h-52 items-center justify-center gap-5 bg-[#081525] text-white">
+                <span className="text-7xl font-bold leading-none text-[#3776ab]">Py</span>
+                <div>
+                  <p className="font-display text-4xl font-bold">Python</p>
+                  <p className="text-2xl font-semibold text-[#ffd343]">Notes</p>
+                </div>
+              </div>
+              <div className="p-6">
+                <h2 className="font-display text-xl font-bold">Python Complete Notes</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Well structured notes from basics to advanced
+                </p>
+                <Button
+                  className="mt-5 w-full"
+                  size="lg"
+                  variant="outline"
+                  disabled
+                >
+                  Coming Soon
                 </Button>
               </div>
             </div>
@@ -397,78 +414,6 @@ function Landing() {
             ))}
           </div>
         </section>
-
-        <section id="reader" className="mx-auto max-w-6xl scroll-mt-8 px-6 py-12">
-          <div className="overflow-hidden rounded-xl border border-border bg-white shadow-soft">
-            <div className="flex items-center justify-between border-b border-border p-5">
-              <h2 className="font-display text-xl font-bold">Python Notes Preview</h2>
-              <a
-                className="flex items-center gap-2 text-sm font-semibold text-brand-foreground"
-                href={PDF_FILE}
-                download
-              >
-                <Download className="h-4 w-4" /> Download
-              </a>
-            </div>
-            <iframe title={PDF_TITLE} src={PDF_FILE} className="h-[75vh] min-h-[34rem] w-full" />
-          </div>
-        </section>
-
-        <section id="internship-reader" className="mx-auto max-w-6xl scroll-mt-8 px-6 py-12">
-          {internshipUnlocked ? (
-            <div className="overflow-hidden rounded-xl border border-border bg-white shadow-soft">
-              <div className="flex items-center justify-between border-b border-border p-5">
-                <h2 className="font-display text-xl font-bold">Your Internships List</h2>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open('https://docs.google.com/spreadsheets/d/14YFhJa9aGHbBhCmY2cI5YtOGs3NBO1n3DT0fTVwc_DM/edit?usp=drivesdk', '_blank')}
-                >
-                  <Download className="h-4 w-4 mr-2" /> Open in Google Sheets
-                </Button>
-              </div>
-              <div className="p-8">
-                <div className="mb-6">
-                  <h3 className="font-display text-2xl font-bold mb-4">100+ Paid Internships</h3>
-                  <p className="text-muted-foreground mb-6">
-                    Complete list of paid internship opportunities from top companies. Click the button below to access the Google Sheets with all details.
-                  </p>
-                  <Button 
-                    size="lg" 
-                    variant="brand" 
-                    onClick={() => window.open('https://docs.google.com/spreadsheets/d/14YFhJa9aGHbBhCmY2cI5YtOGs3NBO1n3DT0fTVwc_DM/edit?usp=drivesdk', '_blank')}
-                  >
-                    <ShoppingCart className="h-4 w-4 mr-2" /> Access Internships List
-                  </Button>
-                </div>
-                <div className="rounded-lg bg-secondary/40 p-6">
-                  <h4 className="font-semibold mb-3">Featured Internships:</h4>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li>• Faabit Designs Pvt Ltd - Full Stack Developer - ₹5,000–10,000/month</li>
-                    <li>• Nsse Fab - Azure & ASP.NET Core Support Engineer - ₹6,000–8,000/month</li>
-                    <li>• DeepThought CultureTech Ventures - Full Stack Development (AI Platform) - ₹5,000–8,000/month</li>
-                    <li>• EmpowerU (Promorph Solutions) - Backend Developer - ₹3,000–5,000/month</li>
-                    <li>• Assetcues Solutions Pvt Ltd - .NET Developer - ₹7,000–10,000/month</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="mx-auto max-w-xl py-8 text-center">
-              <LockKeyhole className="mx-auto h-10 w-10 text-brand-foreground" />
-              <h2 className="mt-4 font-display text-2xl font-bold">Your Internships List is locked</h2>
-              <p className="mt-2 text-muted-foreground">
-                Unlock the complete list of 100+ paid internships for ₹{INTERNSHIP_PRICE_INR}.
-              </p>
-              <Button className="mt-6" size="lg" variant="brand" onClick={openInternshipCheckout}>
-                <LockKeyhole className="h-4 w-4" /> Unlock for ₹{INTERNSHIP_PRICE_INR}
-              </Button>
-              <p className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                <ShieldCheck className="h-3.5 w-3.5" /> Secure payment powered by Razorpay
-              </p>
-            </div>
-          )}
-        </section>
       </main>
 
       <footer id="contact" className="border-t border-border bg-white">
@@ -490,70 +435,15 @@ function Landing() {
           </nav>
         </div>
       </footer>
-    </div>
-  );
-}
 
-function PdfPreview() {
-  const canvasRefs = useRef<Array<HTMLCanvasElement | null>>([]);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    const renderPreview = async () => {
-      try {
-        const [pdfjsLib, pdfWorker] = await Promise.all([
-          import("pdfjs-dist"),
-          import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
-        ]);
-        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker.default;
-        const document = await pdfjsLib.getDocument(PDF_FILE).promise;
-        for (let pageNumber = 1; pageNumber <= Math.min(3, document.numPages); pageNumber += 1) {
-          const page = await document.getPage(pageNumber);
-          const canvas = canvasRefs.current[pageNumber - 1];
-          if (!canvas || cancelled) continue;
-          const baseViewport = page.getViewport({ scale: 1 });
-          const scale = Math.min(1.25, 760 / baseViewport.width);
-          const viewport = page.getViewport({ scale });
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          await page.render({ canvasContext: canvas.getContext("2d")!, viewport }).promise;
-        }
-      } catch {
-        if (!cancelled)
-          setError("The preview will appear once the PDF is added to the public folder.");
-      }
-    };
-    void renderPreview();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (error)
-    return (
-      <div className="rounded-xl border border-dashed border-border bg-secondary/40 p-8 text-center text-sm text-muted-foreground">
-        {error}
-      </div>
-    );
-  return (
-    <div className="grid gap-6 md:grid-cols-3">
-      {[1, 2, 3].map((pageNumber) => (
-        <div
-          key={pageNumber}
-          className="overflow-hidden rounded-lg border border-border bg-white shadow-soft"
-        >
-          <div className="border-b border-border bg-[#faf9ff] px-4 py-2 text-xs font-semibold text-muted-foreground">
-            Page {pageNumber}
-          </div>
-          <canvas
-            ref={(canvas) => {
-              canvasRefs.current[pageNumber - 1] = canvas;
-            }}
-            className="block h-auto w-full"
-          />
-        </div>
-      ))}
+      <CheckoutDialog
+        open={checkoutOpen}
+        onOpenChange={setCheckoutOpen}
+        price={INTERNSHIP_PRICE_INR}
+        title="100+ Paid Internships"
+        onPaymentSuccess={handlePaymentSuccess}
+        courseId={INTERNSHIP_ID}
+      />
     </div>
   );
 }

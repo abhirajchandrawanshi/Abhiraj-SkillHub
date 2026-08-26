@@ -10,28 +10,32 @@ const emailSchema = z.object({
 });
 
 function getBrevoApiKey() {
-  const apiKey = process.env.BREVO_API_KEY?.trim();
+  const apiKey = process.env['BREVO_API_KEY']?.trim();
   if (!apiKey) {
-    console.warn("Brevo API key not configured. Email sending will be skipped.");
+    console.error("BREVO_API_KEY environment variable is not set or empty.");
+    console.error("Please add BREVO_API_KEY to your .env file or Vercel environment variables.");
     return null;
   }
   return apiKey;
 }
 
 function getWebsiteUrl() {
-  const websiteUrl = process.env.WEBSITE_URL?.trim() || "http://localhost:5174";
+  const websiteUrl = process.env['WEBSITE_URL']?.trim() || "http://localhost:5174";
   return websiteUrl;
 }
 
 async function sendEmail(to: string, subject: string, html: string) {
   const apiKey = getBrevoApiKey();
   if (!apiKey) {
-    console.log("Email sending skipped - BREVO_API_KEY not configured");
-    return { success: false, reason: "API key not configured" };
+    console.error("Email sending FAILED - BREVO_API_KEY not configured in environment variables");
+    return { 
+      success: false, 
+      error: "BREVO_API_KEY not configured. Please add BREVO_API_KEY to your .env file or Vercel environment variables." 
+    };
   }
 
   try {
-    console.log("Sending email to:", to, "with subject:", subject);
+    console.log("Attempting to send email to:", to, "with subject:", subject);
 
     const response = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
@@ -57,8 +61,18 @@ async function sendEmail(to: string, subject: string, html: string) {
     const result = await response.json();
 
     if (!response.ok) {
-      console.error("Brevo API error:", result);
-      return { success: false, error: result };
+      console.error("Brevo API error:", JSON.stringify(result, null, 2));
+      console.error("Response status:", response.status, response.statusText);
+      
+      // Specific error handling for 401 Unauthorized
+      if (response.status === 401) {
+        return { 
+          success: false, 
+          error: "Brevo API key is invalid or expired. Please generate a new API key in Brevo dashboard (Account → SMTP & API → API Keys) and update BREVO_API_KEY in your environment variables." 
+        };
+      }
+      
+      return { success: false, error: `Brevo API error: ${JSON.stringify(result)}` };
     }
 
     console.log("Email sent successfully via Brevo:", result);
@@ -67,7 +81,7 @@ async function sendEmail(to: string, subject: string, html: string) {
     console.error("Error sending email via Brevo:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: error instanceof Error ? error.message : "Unknown error occurred while sending email",
     };
   }
 }

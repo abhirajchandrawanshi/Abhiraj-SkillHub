@@ -37,11 +37,13 @@ type RazorpayPayment = {
   currency: string;
   status: string;
   captured: boolean;
+  email?: string;
+  contact?: string;
 };
 
 function getRazorpayCredentials() {
-  const keyId = process.env.RAZORPAY_KEY_ID?.trim();
-  const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
+  const keyId = process.env['RAZORPAY_KEY_ID']?.trim();
+  const keySecret = process.env['RAZORPAY_KEY_SECRET']?.trim();
   
   console.log("Checking Razorpay credentials:", { 
     hasKeyId: !!keyId, 
@@ -196,7 +198,9 @@ export const verifyRazorpayPayment = createServerFn({ method: "POST" })
       amount: payment.amount, 
       currency: payment.currency, 
       status: payment.status,
-      captured: payment.captured 
+      captured: payment.captured,
+      email: payment.email,
+      contact: payment.contact
     });
 
     if (!payment?.id || payment.order_id !== data.orderId) {
@@ -241,5 +245,6 @@ export const verifyRazorpayPayment = createServerFn({ method: "POST" })
       verified: true as const,
       orderId: data.orderId,
       paymentId: data.paymentId,
+      email: payment.email || null,
     };
   });
