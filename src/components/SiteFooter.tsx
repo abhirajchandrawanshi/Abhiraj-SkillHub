@@ -18,7 +18,7 @@ export function SiteFooter() {
     <footer className="mt-8 border-t border-border bg-ink text-ink-foreground">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="min-w-0">
-          <p className="font-display text-lg font-bold">Abhiraj Chandrawanshi</p>
+          <p className="font-display text-lg font-bold">Abhiraj Courses</p>
           <p className="mt-2 max-w-sm text-sm text-ink-foreground/70">
             Practical, mentor-led tech courses for students and early-career engineers in India.
           </p>
@@ -81,7 +81,7 @@ export function SiteFooter() {
         </div>
       </div>
       <div className="border-t border-ink-foreground/10 py-5 text-center text-xs text-ink-foreground/60">
-        © 2026 Abhiraj Chandrawanshi. All rights reserved.
+        © 2026 Abhiraj Courses. All rights reserved.
       </div>
     </footer>
   );

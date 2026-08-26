@@ -12,6 +12,13 @@ export const INTERNSHIP_SUBTITLE =
 /** Charged amount in INR. Server uses this — never trust a client-sent price. */
 export const INTERNSHIP_PRICE_INR = 5;
 
+export const TESTING_ID = "testing";
+export const TESTING_TITLE = "Payment & Access Testing";
+export const TESTING_SUBTITLE =
+  "DO NOT PAY this is for testing purpose";
+/** Charged amount in INR. Server uses this — never trust a client-sent price. */
+export const TESTING_PRICE_INR = 1;
+
 export const COURSE_DETAILS = [
   { label: "Duration", value: "16 weeks · 120 hrs" },
   { label: "Mode", value: "Online · Live + recorded" },

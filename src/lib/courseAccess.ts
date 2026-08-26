@@ -7,6 +7,7 @@ import {
   doc,
   getDoc,
   addDoc,
+  setDoc,
 } from "firebase/firestore";
 
 // ===== COURSE ACCESS MANAGEMENT =====

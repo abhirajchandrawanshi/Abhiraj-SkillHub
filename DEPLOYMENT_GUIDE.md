@@ -1,4 +1,4 @@
-# Deployment Guide for Abhiraj SkillsUp
+# Deployment Guide for Abhiraj Courses
 
 ## Current Status ✅
 

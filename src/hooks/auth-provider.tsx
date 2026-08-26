@@ -14,6 +14,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { auth } from "@/firebase";
 import { AuthContext, type AuthContextValue } from "@/hooks/use-auth";
+import { migrateGuestPurchasesToAccount } from "@/lib/access";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthContextValue["user"]>(null);
@@ -23,6 +24,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void setPersistence(auth, browserLocalPersistence).catch(() => undefined);
     return onAuthStateChanged(auth, (nextUser) => {
       setUser(nextUser);
+      
+      // Migrate guest purchases when user logs in
+      if (nextUser?.email) {
+        void migrateGuestPurchasesToAccount(nextUser.uid, nextUser.email);
+      }
+      
       setLoading(false);
     });
   }, []);

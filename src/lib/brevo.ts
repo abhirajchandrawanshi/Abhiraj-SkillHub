@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { COURSE_ID, INTERNSHIP_ID, COURSE_TITLE, INTERNSHIP_TITLE } from "@/lib/course";
+import { COURSE_ID, INTERNSHIP_ID, COURSE_TITLE, INTERNSHIP_TITLE, TESTING_ID, TESTING_TITLE } from "@/lib/course";
 
 const emailSchema = z.object({
   to: z.string().email(),
@@ -45,7 +45,7 @@ async function sendEmail(to: string, subject: string, html: string) {
       },
       body: JSON.stringify({
         sender: {
-          name: "Abhiraj SkillsUp",
+          name: "Abhiraj Courses",
           email: "abhirajvermen1@gmail.com",
         },
         to: [
@@ -212,6 +212,76 @@ function createInternshipEmailTemplate(userEmail: string, userName: string) {
   return { subject, html };
 }
 
+function createTestingEmailTemplate(userEmail: string, userName: string) {
+  const subject = `🧪 Testing Course Access Granted`;
+  const websiteUrl = getWebsiteUrl();
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Testing Course Access</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .button { display: inline-block; padding: 15px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+        .warning { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin: 20px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>🧪 Testing Course Access Granted</h1>
+          <p>Payment & Access Testing Course - ₹1 Test</p>
+        </div>
+        <div class="content">
+          <p>Hi ${userName},</p>
+          <p>Thank you for testing the payment system! Your ₹1 test payment for the <strong>Payment & Access Testing Course</strong> has been successfully processed.</p>
+          
+          <div class="warning">
+            <p><strong>⚠️ REMINDER:</strong> This is a testing course only. The ₹1 payment was for testing purposes to verify the complete payment and access flow.</p>
+          </div>
+          
+          <h2>🧪 What Was Tested:</h2>
+          <ul>
+            <li>Razorpay payment integration (₹1 test payment)</li>
+            <li>Server-side payment verification</li>
+            <li>Firestore purchase recording</li>
+            <li>Course access restoration</li>
+            <li>Email delivery system</li>
+            <li>Access persistence (refresh/login/logout)</li>
+          </ul>
+          
+          <p>Your access to the testing course is now active. You can test the complete flow including:</p>
+          <ul>
+            <li>Page refresh access persistence</li>
+            <li>Login/logout access behavior</li>
+            <li>Guest vs authenticated user access</li>
+          </ul>
+          
+          <p><strong>Login Details:</strong></p>
+          <p>Email: ${userEmail}</p>
+          
+          <p>This test confirms that the production payment and access system is working correctly.</p>
+          
+          <div class="footer">
+            <p>© 2026 Abhiraj Courses. All rights reserved.</p>
+            <p>This is an automated email, please do not reply.</p>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return { subject, html };
+}
+
 export const sendResourceEmail = createServerFn({ method: "POST" })
   .validator(z.object({
     email: z.string().email(),
@@ -227,6 +297,8 @@ export const sendResourceEmail = createServerFn({ method: "POST" })
       emailTemplate = createCourseEmailTemplate(data.email, data.name);
     } else if (data.courseId === INTERNSHIP_ID) {
       emailTemplate = createInternshipEmailTemplate(data.email, data.name);
+    } else if (data.courseId === TESTING_ID) {
+      emailTemplate = createTestingEmailTemplate(data.email, data.name);
     } else {
       console.error("Unknown courseId:", data.courseId);
       return { success: false, error: "Unknown course ID" };

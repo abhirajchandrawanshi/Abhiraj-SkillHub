@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useCourseAccess } from "@/hooks/use-course-access";
-import { COURSE_PRICE_INR } from "@/lib/course";
+import { COURSE_PRICE_INR, INTERNSHIP_ID } from "@/lib/course";
 
 export const NAV_LINKS = [
   { label: "Home", to: "/", hash: "" },
@@ -16,14 +16,14 @@ export const NAV_LINKS = [
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
-  const { access } = useCourseAccess();
+  const { access } = useCourseAccess(INTERNSHIP_ID);
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur">
       <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3 lg:grid-cols-[auto_1fr_auto]">
         <Link to="/" className="flex min-w-0 items-center gap-2">
           <span className="truncate font-display text-base font-bold sm:text-lg">
-            Abhiraj Chandrawanshi
+            Abhiraj Courses
           </span>
         </Link>
 

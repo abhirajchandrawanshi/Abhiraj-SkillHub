@@ -78,14 +78,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Abhiraj Courses" },
-      { name: "description", content: "Online course platform by Abhiraj Chandrawanshi" },
+      { title: "Abhiraj Courses | Paid Internships & Courses" },
+      { name: "description", content: "Paid internships and courses by Abhiraj Chandrawanshi" },
       { name: "author", content: "Abhiraj Chandrawanshi" },
-      { property: "og:title", content: "Abhiraj Courses" },
-      { property: "og:description", content: "Online course platform by Abhiraj Chandrawanshi" },
+      { property: "og:title", content: "Abhiraj Courses | Paid Internships & Courses" },
+      { property: "og:description", content: "Paid internships and courses by Abhiraj Chandrawanshi" },
       { property: "og:type", content: "website" },
     ],
     links: [
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {

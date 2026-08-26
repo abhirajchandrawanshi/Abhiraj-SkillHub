@@ -11,10 +11,11 @@ import {
   X,
 } from "lucide-react";
 
-import { INTERNSHIP_ID, INTERNSHIP_PRICE_INR } from "@/lib/course";
+import { INTERNSHIP_ID, INTERNSHIP_PRICE_INR, TESTING_ID, TESTING_PRICE_INR, TESTING_TITLE } from "@/lib/course";
 import { Button } from "@/components/ui/button";
 import { CheckoutDialog } from "@/components/CheckoutDialog";
 import { useAuth } from "@/hooks/use-auth";
+import { useCourseAccess } from "@/hooks/use-course-access";
 import type { CourseAccess } from "@/lib/access";
 
 const SITE_TITLE = "Abhiraj Courses";
@@ -33,8 +34,10 @@ function Landing() {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const { user, signOutUser } = useAuth();
-  const [internshipUnlocked, setInternshipUnlocked] = useState(false);
+  const { access: internshipAccess, ready: accessReady } = useCourseAccess(INTERNSHIP_ID);
+  const { access: testingAccess } = useCourseAccess(TESTING_ID);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutCourseId, setCheckoutCourseId] = useState(INTERNSHIP_ID);
 
   const handleAuth = () => {
     setMenuOpen(false);
@@ -47,15 +50,24 @@ function Landing() {
   };
 
   const handleInternshipAccess = () => {
-    if (internshipUnlocked) {
+    if (internshipAccess) {
       window.open('https://docs.google.com/spreadsheets/d/14YFhJa9aGHbBhCmY2cI5YtOGs3NBO1n3DT0fTVwc_DM/edit?usp=drivesdk', '_blank');
     } else {
+      setCheckoutCourseId(INTERNSHIP_ID);
+      setCheckoutOpen(true);
+    }
+  };
+
+  const handleTestingAccess = () => {
+    if (testingAccess) {
+      alert("Testing course access granted! The payment and access system is working correctly.");
+    } else {
+      setCheckoutCourseId(TESTING_ID);
       setCheckoutOpen(true);
     }
   };
 
   const handlePaymentSuccess = (access: CourseAccess) => {
-    setInternshipUnlocked(true);
     setCheckoutOpen(false);
   };
 
@@ -63,7 +75,7 @@ function Landing() {
     return (
       <span>
         {text}
-        {!internshipUnlocked && <LockKeyhole className="h-4 w-4 ml-2" />}
+        {!internshipAccess && <LockKeyhole className="h-4 w-4 ml-2" />}
       </span>
     );
   };
@@ -153,10 +165,10 @@ function Landing() {
                 className="mt-8" 
                 size="lg" 
                 variant="brand"
-                style={internshipUnlocked ? { backgroundColor: "#22c55e", color: "white" } : undefined}
+                style={internshipAccess ? { backgroundColor: "#22c55e", color: "white" } : undefined}
                 onClick={handleInternshipAccess}
               >
-                {renderInternshipButton(internshipUnlocked ? "Access Now" : "Buy Now")}
+                {renderInternshipButton(internshipAccess ? "Access Now" : "Buy Now")}
               </Button>
             </div>
             <div className="overflow-hidden rounded-xl bg-white shadow-lift">
@@ -185,15 +197,16 @@ function Landing() {
                   className="mt-5 w-full"
                   size="lg"
                   variant="brand"
-                  style={internshipUnlocked ? { backgroundColor: "#22c55e", color: "white" } : {}}
+                  style={internshipAccess ? { backgroundColor: "#22c55e", color: "white" } : {}}
                   onClick={handleInternshipAccess}
                 >
-                  {renderInternshipButton(internshipUnlocked ? "Access" : "Buy Now")}
+                  {renderInternshipButton(internshipAccess ? "Access" : "Buy Now")}
                 </Button>
               </div>
             </div>
           </div>
         </section>
+
 
         {/* Python Course Section - CHANGED TO COMING SOON */}
         <section className="border-b border-border bg-[#faf9ff]">
@@ -395,6 +408,66 @@ function Landing() {
           </div>
         </section>
 
+        {/* Testing Course Section - FOR TESTING ONLY */}
+        <section className="border-b border-border bg-[#faf9ff]">
+          <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-12 md:grid-cols-[1fr_28rem] md:py-14">
+            <div>
+              <div className="mb-4 inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+                ⚠️ Testing Only
+              </div>
+              <h1 className="max-w-xl font-display text-5xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
+                Payment & Access Testing
+              </h1>
+              <p className="mt-5 max-w-md text-xl leading-8 text-muted-foreground">
+                <span className="text-red-600 font-bold">DO NOT PAY</span> this is for testing purpose
+              </p>
+              <Button 
+                className="mt-8" 
+                size="lg" 
+                variant="outline"
+                onClick={handleTestingAccess}
+              >
+                {testingAccess ? "Testing Complete" : "Test Payment (₹1)"}
+              </Button>
+            </div>
+            <div className="overflow-hidden rounded-xl bg-white shadow-lift">
+              <div className="flex h-52 items-center justify-center gap-5 bg-[#081525] text-white">
+                <span className="text-7xl font-bold leading-none">🧪</span>
+                <div>
+                  <p className="font-display text-4xl font-bold">Testing</p>
+                  <p className="text-2xl font-semibold text-[#ffd343]">Course</p>
+                </div>
+              </div>
+              <div className="p-6">
+                <h2 className="font-display text-xl font-bold">Payment & Access Testing</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Complete end-to-end testing of payment and access system
+                </p>
+                <div className="mt-5 flex items-center gap-4">
+                  <span className="font-display text-3xl font-bold text-brand-foreground">
+                    ₹{TESTING_PRICE_INR}
+                  </span>
+                  <span className="text-base text-muted-foreground line-through">₹99</span>
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+                    Test Only
+                  </span>
+                </div>
+                <Button
+                  className="mt-5 w-full"
+                  size="lg"
+                  variant="outline"
+                  onClick={handleTestingAccess}
+                >
+                  {testingAccess ? "Testing Complete" : "Test Payment (₹1)"}
+                </Button>
+                <p className="mt-3 text-xs text-center text-muted-foreground">
+                  For testing purposes only
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="about" className="border-b border-border bg-white">
           <div className="mx-auto grid max-w-6xl gap-8 px-6 py-9 sm:grid-cols-3">
             {[
@@ -439,10 +512,10 @@ function Landing() {
       <CheckoutDialog
         open={checkoutOpen}
         onOpenChange={setCheckoutOpen}
-        price={INTERNSHIP_PRICE_INR}
-        title="100+ Paid Internships"
+        price={checkoutCourseId === TESTING_ID ? TESTING_PRICE_INR : INTERNSHIP_PRICE_INR}
+        title={checkoutCourseId === TESTING_ID ? TESTING_TITLE : "100+ Paid Internships"}
         onPaymentSuccess={handlePaymentSuccess}
-        courseId={INTERNSHIP_ID}
+        courseId={checkoutCourseId}
       />
     </div>
   );

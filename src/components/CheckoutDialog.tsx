@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Loader2, Lock, ShieldCheck, CheckCircle2, Mail } from "lucide-react";
 
-import { COURSE_ID, INTERNSHIP_ID } from "@/lib/course";
+import { COURSE_ID, INTERNSHIP_ID, TESTING_ID, TESTING_TITLE, TESTING_PRICE_INR, INTERNSHIP_TITLE, INTERNSHIP_PRICE_INR, COURSE_TITLE, COURSE_PRICE_INR } from "@/lib/course";
 import { loadRazorpayCheckout } from "@/lib/load-razorpay";
 import { createRazorpayOrder, verifyRazorpayPayment } from "@/lib/razorpay";
 import { sendResourceEmail } from "@/lib/brevo";
 import type { CourseAccess } from "@/lib/access";
 import { grantFirestoreAccess, grantCourseAccess } from "@/lib/access";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,13 +35,18 @@ export function CheckoutDialog({
   price: number;
   title: string;
   onPaymentSuccess: (access: CourseAccess) => void;
-  courseId?: typeof COURSE_ID | typeof INTERNSHIP_ID;
+  courseId?: typeof COURSE_ID | typeof INTERNSHIP_ID | typeof TESTING_ID;
 }) {
+  const { user } = useAuth();
   const [paymentError, setPaymentError] = useState("");
   const [emailStatus, setEmailStatus] = useState<"none" | "sending" | "success" | "failed">("none");
   const [emailError, setEmailError] = useState("");
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "processing" | "done">("idle");
+
+  // Override title and price based on courseId for internal consistency
+  const actualTitle = courseId === TESTING_ID ? TESTING_TITLE : courseId === INTERNSHIP_ID ? INTERNSHIP_TITLE : title;
+  const actualPrice = courseId === TESTING_ID ? TESTING_PRICE_INR : courseId === INTERNSHIP_ID ? INTERNSHIP_PRICE_INR : price;
 
   const isValidEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -85,7 +91,7 @@ export function CheckoutDialog({
         amount: order.amount,
         currency: order.currency,
         name: userName,
-        description: title,
+        description: actualTitle,
         order_id: order.orderId,
         modal: {
           ondismiss: function() {
@@ -93,7 +99,7 @@ export function CheckoutDialog({
             setStatus("idle");
           },
         },
-        theme: { color: "#e85d04" },
+        theme: { color: courseId === TESTING_ID ? "#dc2626" : "#e85d04" },
         handler: async (response) => {
           try {
             console.log("Razorpay success handler called:", {
@@ -116,7 +122,12 @@ export function CheckoutDialog({
             const finalEmail = userEmail;
             const finalUserName = userName;
             
+            // Use Firebase UID if user is authenticated, otherwise use email as userId for guest purchases
+            const userId = user?.uid || finalEmail;
+            const isGuest = !user?.uid; // Guest purchase if no Firebase UID
+            
             const access = {
+              userId: userId,
               email: finalEmail,
               paymentId: verified.paymentId,
               orderId: verified.orderId,
@@ -124,11 +135,11 @@ export function CheckoutDialog({
               courseId: courseId,
             };
             
-            console.log("Granting access to:", access.email, "for course:", courseId);
+            console.log("Granting access to:", access.email, "for course:", courseId, "isGuest:", isGuest);
             
-            // Save to Firestore
+            // Save to Firestore (with guest flag for temporary access)
             try {
-              await grantFirestoreAccess(access, courseId);
+              await grantFirestoreAccess(access, courseId, isGuest);
             } catch (firestoreError) {
               console.error("Firestore access grant failed, using localStorage fallback:", firestoreError);
               // Fallback to localStorage if Firestore fails
@@ -244,8 +255,15 @@ export function CheckoutDialog({
         ) : (
           <form onSubmit={submit}>
             <DialogHeader>
-              <DialogTitle className="text-2xl">Secure checkout</DialogTitle>
-              <DialogDescription>{title} — one-time payment, lifetime access.</DialogDescription>
+              <DialogTitle className="text-2xl">
+                {courseId === TESTING_ID ? "Testing Course Checkout" : "Secure checkout"}
+              </DialogTitle>
+              <DialogDescription>
+                {courseId === TESTING_ID 
+                  ? "This is a ₹1 test payment to verify the complete payment and access system."
+                  : `${actualTitle} — one-time payment, lifetime access.`
+                }
+              </DialogDescription>
             </DialogHeader>
 
             <div className="mt-5 space-y-4">
@@ -280,7 +298,7 @@ export function CheckoutDialog({
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Total due today</span>
               <span className="font-display text-2xl font-bold">
-                ₹{price.toLocaleString("en-IN")}
+                ₹{actualPrice.toLocaleString("en-IN")}
               </span>
             </div>
 
@@ -296,7 +314,7 @@ export function CheckoutDialog({
                 </>
               ) : (
                 <>
-                  <Lock className="h-4 w-4" /> Pay ₹{price.toLocaleString("en-IN")}
+                  <Lock className="h-4 w-4" /> Pay ₹{actualPrice.toLocaleString("en-IN")}
                 </>
               )}
             </Button>

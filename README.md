@@ -106,7 +106,7 @@ Use these placeholder variable names in `.env` (see `.env.example`):
 
 ```sh
 git clone <repo-url>
-cd vivid-academy-glow
+cd abhiraj-courses
 npm i
 ```
 

@@ -7,13 +7,16 @@ import {
   COURSE_TITLE,
   INTERNSHIP_ID,
   INTERNSHIP_PRICE_INR,
-  INTERNSHIP_TITLE
+  INTERNSHIP_TITLE,
+  TESTING_ID,
+  TESTING_PRICE_INR,
+  TESTING_TITLE
 } from "@/lib/course";
 
 const RAZORPAY_API = "https://api.razorpay.com/v1";
 
 const customerSchema = z.object({
-  courseId: z.union([z.literal(COURSE_ID), z.literal(INTERNSHIP_ID)]),
+  courseId: z.union([z.literal(COURSE_ID), z.literal(INTERNSHIP_ID), z.literal(TESTING_ID)]),
   name: z.string().trim().min(2).max(100),
   email: z.string().trim().email().max(255),
 });
@@ -114,11 +117,15 @@ export const createRazorpayOrder = createServerFn({ method: "POST" })
       // Determine price and title based on courseId
       const amountPaise = data.courseId === COURSE_ID 
         ? COURSE_PRICE_INR * 100 
-        : INTERNSHIP_PRICE_INR * 100;
+        : data.courseId === INTERNSHIP_ID 
+          ? INTERNSHIP_PRICE_INR * 100 
+          : TESTING_PRICE_INR * 100;
       
       const courseTitle = data.courseId === COURSE_ID 
         ? COURSE_TITLE 
-        : INTERNSHIP_TITLE;
+        : data.courseId === INTERNSHIP_ID 
+          ? INTERNSHIP_TITLE 
+          : TESTING_TITLE;
 
       console.log("Order details:", { amountPaise, courseTitle, currency: "INR" });
 
@@ -211,10 +218,10 @@ export const verifyRazorpayPayment = createServerFn({ method: "POST" })
       throw new Error(`Payment currency mismatch. Expected: INR, Got: ${payment.currency}`);
     }
 
-    // Validate amount matches either course or internship price
-    const validAmounts = [COURSE_PRICE_INR * 100, INTERNSHIP_PRICE_INR * 100];
+    // Validate amount matches either course, internship, or testing price
+    const validAmounts = [COURSE_PRICE_INR * 100, INTERNSHIP_PRICE_INR * 100, TESTING_PRICE_INR * 100];
     if (!validAmounts.includes(payment.amount)) {
-      throw new Error(`Payment amount mismatch. Expected: ₹${COURSE_PRICE_INR} or ₹${INTERNSHIP_PRICE_INR}, Got: ₹${payment.amount / 100}`);
+      throw new Error(`Payment amount mismatch. Expected: ₹${COURSE_PRICE_INR}, ₹${INTERNSHIP_PRICE_INR}, or ₹${TESTING_PRICE_INR}, Got: ₹${payment.amount / 100}`);
     }
 
     if (!(payment.captured === true || payment.status === "authorized")) {
