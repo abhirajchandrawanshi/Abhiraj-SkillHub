@@ -10,7 +10,7 @@ export const INTERNSHIP_TITLE = "100+ Paid Internships";
 export const INTERNSHIP_SUBTITLE =
   "Curated list of 100+ paid internship opportunities in top companies with complete application details.";
 /** Charged amount in INR. Server uses this — never trust a client-sent price. */
-export const INTERNSHIP_PRICE_INR = 1;
+export const INTERNSHIP_PRICE_INR = 5;
 
 export const COURSE_DETAILS = [
   { label: "Duration", value: "16 weeks · 120 hrs" },
