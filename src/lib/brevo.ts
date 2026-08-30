@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { COURSE_ID, INTERNSHIP_ID, COURSE_TITLE, INTERNSHIP_TITLE, TESTING_ID, TESTING_TITLE } from "@/lib/course";
+import { COURSE_ID, INTERNSHIP_ID, COURSE_TITLE, INTERNSHIP_TITLE, TESTING_ID, TESTING_TITLE, OMNIROUTE_ID } from "@/lib/course";
 
 const emailSchema = z.object({
   to: z.string().email(),
@@ -282,6 +282,66 @@ function createTestingEmailTemplate(userEmail: string, userName: string) {
   return { subject, html };
 }
 
+function createOmnirouteEmailTemplate(userEmail: string, userName: string) {
+  const subject = `🎉 Your OmniRoute Setup Guide - Access Granted!`;
+  const driveUrl = "https://drive.google.com/file/d/1FgyD5AFVnuVEGp7XqiE3H5DlAkLEYKPB/view?usp=sharing";
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>OmniRoute Setup Access</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #0d9488 0%, #115e59 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .button { display: inline-block; padding: 15px 30px; background: #0d9488; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>🎉 Payment Successful!</h1>
+          <p>Your OmniRoute Setup Guide is now unlocked</p>
+        </div>
+        <div class="content">
+          <p>Hi ${userName},</p>
+          <p>Thank you for your purchase! Your payment for <strong>OmniRoute Setup for Free Claude Tokens</strong> has been successfully processed.</p>
+          
+          <h2>🤖 What You Get:</h2>
+          <ul>
+            <li>Easy 4 step setup guide</li>
+            <li>Get 1.5 Billion AI tokens each month completely FREE</li>
+            <li>Direct access to the setup resource</li>
+          </ul>
+          
+          <p>You can access the setup guide directly here:</p>
+          <a href="${driveUrl}" class="button">Access Setup Guide (Google Drive)</a>
+          
+          <p><strong>Login Details:</strong></p>
+          <p>Email: ${userEmail}</p>
+          
+          <p>If you have any questions or need assistance, feel free to reach out to our support team.</p>
+          
+          <p>Happy prompting! 🚀</p>
+          
+          <div class="footer">
+            <p>© 2026 Abhiraj Courses. All rights reserved.</p>
+            <p>This is an automated email, please do not reply.</p>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return { subject, html };
+}
+
 export const sendResourceEmail = createServerFn({ method: "POST" })
   .validator(z.object({
     email: z.string().email(),
@@ -299,6 +359,8 @@ export const sendResourceEmail = createServerFn({ method: "POST" })
       emailTemplate = createInternshipEmailTemplate(data.email, data.name);
     } else if (data.courseId === TESTING_ID) {
       emailTemplate = createTestingEmailTemplate(data.email, data.name);
+    } else if (data.courseId === OMNIROUTE_ID) {
+      emailTemplate = createOmnirouteEmailTemplate(data.email, data.name);
     } else {
       console.error("Unknown courseId:", data.courseId);
       return { success: false, error: "Unknown course ID" };

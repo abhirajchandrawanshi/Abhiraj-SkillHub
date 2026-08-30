@@ -11,12 +11,14 @@ import {
   X,
 } from "lucide-react";
 
-import { INTERNSHIP_ID, INTERNSHIP_PRICE_INR, TESTING_ID, TESTING_PRICE_INR, TESTING_TITLE } from "@/lib/course";
+import { INTERNSHIP_ID, INTERNSHIP_PRICE_INR, TESTING_ID, TESTING_PRICE_INR, TESTING_TITLE, OMNIROUTE_ID, OMNIROUTE_PRICE_INR, OMNIROUTE_TITLE, isLegacyCourseId, getLegacyCoursePrice, getLegacyCourseTitle } from "@/lib/course";
 import { Button } from "@/components/ui/button";
 import { CheckoutDialog } from "@/components/CheckoutDialog";
 import { useAuth } from "@/hooks/use-auth";
 import { useCourseAccess } from "@/hooks/use-course-access";
 import type { CourseAccess } from "@/lib/access";
+import { useQuery } from "@tanstack/react-query";
+import { getPublishedCourses } from "@/lib/firebase-courses";
 
 const SITE_TITLE = "Abhiraj Courses";
 
@@ -36,8 +38,20 @@ function Landing() {
   const { user, signOutUser } = useAuth();
   const { access: internshipAccess, ready: accessReady } = useCourseAccess(INTERNSHIP_ID);
   const { access: testingAccess } = useCourseAccess(TESTING_ID);
+  const { access: omnirouteAccess } = useCourseAccess(OMNIROUTE_ID);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutCourseId, setCheckoutCourseId] = useState(INTERNSHIP_ID);
+  
+  // Fetch dynamic courses from Firestore
+  const { data: coursesData, isLoading: coursesLoading } = useQuery({
+    queryKey: ["published-courses"],
+    queryFn: async () => {
+      const result = await getPublishedCourses();
+      return { courses: result };
+    },
+  });
+
+  const dynamicCourses = coursesData?.courses || [];
 
   const handleAuth = () => {
     setMenuOpen(false);
@@ -67,8 +81,29 @@ function Landing() {
     }
   };
 
+  const handleOmnirouteAccess = () => {
+    if (omnirouteAccess) {
+      window.open('https://drive.google.com/file/d/1FgyD5AFVnuVEGp7XqiE3H5DlAkLEYKPB/view?usp=sharing', '_blank');
+    } else {
+      setCheckoutCourseId(OMNIROUTE_ID);
+      setCheckoutOpen(true);
+    }
+  };
+
   const handlePaymentSuccess = (access: CourseAccess) => {
     setCheckoutOpen(false);
+  };
+
+  const handleDynamicCourseAccess = (courseId: string, coursePrice: number) => {
+    // For dynamic courses, we'll use the existing checkout system
+    setCheckoutCourseId(courseId);
+    setCheckoutOpen(true);
+  };
+
+  const getDynamicCourseAccess = (courseId: string) => {
+    // Check if user has access to this dynamic course
+    // This would need to be implemented similarly to useCourseAccess
+    return false; // For now, assume no access
   };
 
   const renderInternshipButton = (text: string) => {
@@ -151,7 +186,72 @@ function Landing() {
       </header>
 
       <main id="top">
-        {/* 100+ Paid Internships Section - MOVED TO TOP */}
+        {/* OmniRoute Setup Section - TOP */}
+        <section className="border-b border-border bg-gradient-to-br from-[#f0fdfa] to-[#f0f9ff]">
+          <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-12 md:grid-cols-[1fr_28rem] md:py-14">
+            <div>
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-teal-100 px-4 py-1.5 text-xs font-bold text-teal-700 uppercase tracking-wider">
+                🔥 New
+              </div>
+              <h1 className="max-w-xl font-display text-5xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
+                <span className="text-teal-600">OmniRoute</span> Setup for Free Claude Tokens
+              </h1>
+              <p className="mt-5 max-w-md text-xl leading-8 text-muted-foreground">
+                Easy 4 step setup to get 1.5 Billion AI tokens each month completely FREE
+              </p>
+              <Button
+                className="mt-8"
+                size="lg"
+                variant="brand"
+                style={omnirouteAccess ? { backgroundColor: "#0d9488", color: "white" } : undefined}
+                onClick={handleOmnirouteAccess}
+              >
+                <span>
+                  {omnirouteAccess ? "Access Guide" : "Get Access — ₹9"}
+                  {!omnirouteAccess && <LockKeyhole className="h-4 w-4 ml-2" />}
+                </span>
+              </Button>
+            </div>
+            <div className="overflow-hidden rounded-xl bg-white shadow-lift">
+              <div className="flex h-52 items-center justify-center gap-5 bg-gradient-to-br from-[#0f172a] to-[#134e4a] text-white">
+                <span className="text-7xl font-bold leading-none">🤖</span>
+                <div>
+                  <p className="font-display text-4xl font-bold">OmniRoute</p>
+                  <p className="text-2xl font-semibold text-teal-300">Free AI Tokens</p>
+                </div>
+              </div>
+              <div className="p-6">
+                <h2 className="font-display text-xl font-bold">OmniRoute Setup for Free Claude Tokens</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Easy 4 step setup to get 1.5 Billion AI tokens each month completely FREE
+                </p>
+                <div className="mt-5 flex items-center gap-4">
+                  <span className="font-display text-3xl font-bold text-teal-600">
+                    ₹{OMNIROUTE_PRICE_INR}
+                  </span>
+                  <span className="text-base text-muted-foreground line-through">₹499</span>
+                  <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-bold text-teal-700">
+                    98% OFF
+                  </span>
+                </div>
+                <Button
+                  className="mt-5 w-full"
+                  size="lg"
+                  variant="brand"
+                  style={omnirouteAccess ? { backgroundColor: "#0d9488", color: "white" } : {}}
+                  onClick={handleOmnirouteAccess}
+                >
+                  <span>
+                    {omnirouteAccess ? "Access Guide" : "Get Access — ₹9"}
+                    {!omnirouteAccess && <LockKeyhole className="h-4 w-4 ml-2" />}
+                  </span>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 100+ Paid Internships Section */}
         <section id="internships" className="border-b border-border bg-[#faf9ff]">
           <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-12 md:grid-cols-[1fr_28rem] md:py-14">
             <div>
@@ -460,13 +560,73 @@ function Landing() {
                 >
                   {testingAccess ? "Testing Complete" : "Test Payment (₹1)"}
                 </Button>
-                <p className="mt-3 text-xs text-center text-muted-foreground">
-                  For testing purposes only
-                </p>
               </div>
             </div>
           </div>
         </section>
+
+        {/* Dynamic Courses Section */}
+        {!coursesLoading && dynamicCourses.length > 0 && (
+          <section className="border-b border-border bg-[#faf9ff]">
+            <div className="mx-auto max-w-6xl px-6 py-12 md:py-14">
+              <div className="mb-8">
+                <h2 className="font-display text-3xl font-bold">More Courses</h2>
+                <p className="mt-2 text-muted-foreground">
+                  Explore our latest course offerings
+                </p>
+              </div>
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {dynamicCourses.map((course) => (
+                  <div key={course.id} className="overflow-hidden rounded-xl bg-white shadow-lift">
+                    {course.thumbnail && (
+                      <div className="aspect-video w-full overflow-hidden">
+                        <img
+                          src={course.thumbnail}
+                          alt={course.title}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    )}
+                    <div className="p-6">
+                      <div className="mb-2 inline-flex items-center rounded-full bg-brand-foreground/10 px-3 py-1 text-xs font-semibold text-brand-foreground">
+                        {course.category}
+                      </div>
+                      <h3 className="font-display text-xl font-bold">{course.title}</h3>
+                      <p className="mt-2 text-sm text-muted-foreground line-clamp-2">
+                        {course.subtitle}
+                      </p>
+                      <div className="mt-4 flex items-center gap-3">
+                        <span className="font-display text-2xl font-bold text-brand-foreground">
+                          ₹{course.price}
+                        </span>
+                        {course.originalPrice && course.originalPrice > course.price && (
+                          <>
+                            <span className="text-sm text-muted-foreground line-through">
+                              ₹{course.originalPrice}
+                            </span>
+                            {course.discount && (
+                              <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-600">
+                                {course.discount}% OFF
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      <Button
+                        className="mt-4 w-full"
+                        size="lg"
+                        variant="brand"
+                        onClick={() => handleDynamicCourseAccess(course.id, course.price)}
+                      >
+                        {getDynamicCourseAccess(course.id) ? "Access Now" : "Buy Now"}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         <section id="about" className="border-b border-border bg-white">
           <div className="mx-auto grid max-w-6xl gap-8 px-6 py-9 sm:grid-cols-3">
@@ -512,8 +672,16 @@ function Landing() {
       <CheckoutDialog
         open={checkoutOpen}
         onOpenChange={setCheckoutOpen}
-        price={checkoutCourseId === TESTING_ID ? TESTING_PRICE_INR : INTERNSHIP_PRICE_INR}
-        title={checkoutCourseId === TESTING_ID ? TESTING_TITLE : "100+ Paid Internships"}
+        price={
+          checkoutCourseId === TESTING_ID ? TESTING_PRICE_INR :
+          checkoutCourseId === OMNIROUTE_ID ? OMNIROUTE_PRICE_INR :
+          INTERNSHIP_PRICE_INR
+        }
+        title={
+          checkoutCourseId === TESTING_ID ? TESTING_TITLE :
+          checkoutCourseId === OMNIROUTE_ID ? OMNIROUTE_TITLE :
+          "100+ Paid Internships"
+        }
         onPaymentSuccess={handlePaymentSuccess}
         courseId={checkoutCourseId}
       />

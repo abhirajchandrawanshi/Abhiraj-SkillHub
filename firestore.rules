@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Allow public read access to published courses
+    match /courses/{courseId} {
+      allow read: if resource.data.status == 'published' || resource.data.published == true;
+      allow write: if false; // No public write access
+    }
+    
+    // Allow read access to courseAccess for authenticated users
+    match /courseAccess/{accessId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow write: if false; // No public write access
+    }
+    
+    // Allow read access to enrollments for authenticated users
+    match /enrollments/{enrollmentId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow write: if false; // No public write access
+    }
+    
+    // Admin users collection - restricted access
+    match /adminUsers/{userId} {
+      allow read, write: if false; // No direct access, managed via Firebase Console
+    }
+  }
+}

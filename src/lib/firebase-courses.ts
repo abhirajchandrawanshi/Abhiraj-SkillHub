@@ -10,16 +10,28 @@ import {
   where,
 } from "firebase/firestore";
 
-// Course type matching the Firestore structure
+// Course type matching the Firestore structure (compatible with admin Course type)
 export type Course = {
   id: string;
   title: string;
-  slug: string;
+  subtitle?: string;
   description: string;
   price: number;
-  thumbnail: string;
-  published: boolean;
+  originalPrice?: number;
+  discount?: number;
+  thumbnail?: string;
+  category?: string;
+  instructor?: string;
+  duration?: string;
+  status?: "published" | "draft";
+  published?: boolean; // Legacy field for backward compatibility
+  slug?: string; // Legacy field for backward compatibility
   createdAt?: any;
+  updatedAt?: any;
+  details?: string;
+  accessInfo?: string;
+  metaTitle?: string;
+  metaDescription?: string;
 };
 
 // Course metadata details (from course.ts)
@@ -91,7 +103,7 @@ export async function getCourseById(courseId: string): Promise<Course | null> {
  * Get all published courses
  */
 export async function getPublishedCourses(): Promise<Course[]> {
-  const q = query(coursesCollection, where("published", "==", true));
+  const q = query(coursesCollection, where("status", "==", "published"));
   const snapshot = await getDocs(q);
   return snapshot.docs.map((doc) => ({
     id: doc.id,
@@ -108,65 +120,6 @@ export async function setCourse(course: Course): Promise<void> {
     ...course,
     createdAt: new Date().toISOString(),
   });
-}
-
-/**
- * Get a lesson from a course by lesson ID
- */
-export function getLessonFromCourse(
-  course: Course,
-  lessonId: string
-): { lesson: Lesson; module: Module } | null {
-  const module = course.modules?.find((m) =>
-    m.lessons.some((l) => l.id === lessonId)
-  );
-
-  if (!module) {
-    return null;
-  }
-
-  const lesson = module.lessons.find((l) => l.id === lessonId);
-
-  if (!lesson) {
-    return null;
-  }
-
-  return { lesson, module };
-}
-
-/**
- * Set a course (used for initial setup or adding new courses)
- */
-export async function setCourse(course: Course): Promise<void> {
-  const docRef = doc(coursesCollection, course.id);
-  await setDoc(docRef, {
-    ...course,
-    createdAt: new Date().toISOString(),
-  });
-}
-
-/**
- * Get a lesson from a course by lesson ID
- */
-export function getLessonFromCourse(
-  course: Course,
-  lessonId: string
-): { lesson: Lesson; module: Module } | null {
-  const module = course.modules?.find((m) =>
-    m.lessons.some((l) => l.id === lessonId)
-  );
-
-  if (!module) {
-    return null;
-  }
-
-  const lesson = module.lessons.find((l) => l.id === lessonId);
-
-  if (!lesson) {
-    return null;
-  }
-
-  return { lesson, module };
 }
 
 // ===== ENROLLMENT OPERATIONS =====

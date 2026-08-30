@@ -10,13 +10,18 @@ import {
   INTERNSHIP_TITLE,
   TESTING_ID,
   TESTING_PRICE_INR,
-  TESTING_TITLE
+  TESTING_TITLE,
+  OMNIROUTE_PRICE_INR,
+  isLegacyCourseId,
+  getLegacyCoursePrice,
+  getLegacyCourseTitle
 } from "@/lib/course";
+import { getCourse as getCourseFromDb } from "./admin";
 
 const RAZORPAY_API = "https://api.razorpay.com/v1";
 
 const customerSchema = z.object({
-  courseId: z.union([z.literal(COURSE_ID), z.literal(INTERNSHIP_ID), z.literal(TESTING_ID)]),
+  courseId: z.string().min(1),
   name: z.string().trim().min(2).max(100),
   email: z.string().trim().email().max(255),
 });
@@ -114,18 +119,28 @@ export const createRazorpayOrder = createServerFn({ method: "POST" })
       
       const { keyId } = getRazorpayCredentials();
       
-      // Determine price and title based on courseId
-      const amountPaise = data.courseId === COURSE_ID 
-        ? COURSE_PRICE_INR * 100 
-        : data.courseId === INTERNSHIP_ID 
-          ? INTERNSHIP_PRICE_INR * 100 
-          : TESTING_PRICE_INR * 100;
+      let amountPaise: number;
+      let courseTitle: string;
       
-      const courseTitle = data.courseId === COURSE_ID 
-        ? COURSE_TITLE 
-        : data.courseId === INTERNSHIP_ID 
-          ? INTERNSHIP_TITLE 
-          : TESTING_TITLE;
+      // Check if it's a legacy course or dynamic course
+      if (isLegacyCourseId(data.courseId)) {
+        // Use legacy pricing
+        amountPaise = getLegacyCoursePrice(data.courseId) * 100;
+        courseTitle = getLegacyCourseTitle(data.courseId);
+      } else {
+        // Fetch from Firestore
+        try {
+          const courseResult = await getCourseFromDb({ data: { id: data.courseId } });
+          if (!courseResult.success || !courseResult.course) {
+            throw new Error("Course not found");
+          }
+          amountPaise = courseResult.course.price * 100;
+          courseTitle = courseResult.course.title;
+        } catch (error) {
+          console.error("Error fetching course from database:", error);
+          throw new Error("Invalid course ID");
+        }
+      }
 
       console.log("Order details:", { amountPaise, courseTitle, currency: "INR" });
 
@@ -218,10 +233,10 @@ export const verifyRazorpayPayment = createServerFn({ method: "POST" })
       throw new Error(`Payment currency mismatch. Expected: INR, Got: ${payment.currency}`);
     }
 
-    // Validate amount matches either course, internship, or testing price
-    const validAmounts = [COURSE_PRICE_INR * 100, INTERNSHIP_PRICE_INR * 100, TESTING_PRICE_INR * 100];
+    // Validate amount matches either course, internship, testing, or omniroute price
+    const validAmounts = [COURSE_PRICE_INR * 100, INTERNSHIP_PRICE_INR * 100, TESTING_PRICE_INR * 100, OMNIROUTE_PRICE_INR * 100];
     if (!validAmounts.includes(payment.amount)) {
-      throw new Error(`Payment amount mismatch. Expected: ₹${COURSE_PRICE_INR}, ₹${INTERNSHIP_PRICE_INR}, or ₹${TESTING_PRICE_INR}, Got: ₹${payment.amount / 100}`);
+      throw new Error(`Payment amount mismatch. Expected: ₹${COURSE_PRICE_INR}, ₹${INTERNSHIP_PRICE_INR}, ₹${TESTING_PRICE_INR}, or ₹${OMNIROUTE_PRICE_INR}, Got: ₹${payment.amount / 100}`);
     }
 
     if (!(payment.captured === true || payment.status === "authorized")) {

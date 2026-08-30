@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Loader2, Lock, ShieldCheck, CheckCircle2, Mail } from "lucide-react";
 
-import { COURSE_ID, INTERNSHIP_ID, TESTING_ID, TESTING_TITLE, TESTING_PRICE_INR, INTERNSHIP_TITLE, INTERNSHIP_PRICE_INR, COURSE_TITLE, COURSE_PRICE_INR } from "@/lib/course";
+import { COURSE_ID, INTERNSHIP_ID, TESTING_ID, TESTING_TITLE, TESTING_PRICE_INR, INTERNSHIP_TITLE, INTERNSHIP_PRICE_INR, COURSE_TITLE, COURSE_PRICE_INR, OMNIROUTE_ID, OMNIROUTE_TITLE, OMNIROUTE_PRICE_INR } from "@/lib/course";
 import { loadRazorpayCheckout } from "@/lib/load-razorpay";
 import { createRazorpayOrder, verifyRazorpayPayment } from "@/lib/razorpay";
 import { sendResourceEmail } from "@/lib/brevo";
@@ -35,7 +35,7 @@ export function CheckoutDialog({
   price: number;
   title: string;
   onPaymentSuccess: (access: CourseAccess) => void;
-  courseId?: typeof COURSE_ID | typeof INTERNSHIP_ID | typeof TESTING_ID;
+  courseId?: typeof COURSE_ID | typeof INTERNSHIP_ID | typeof TESTING_ID | typeof OMNIROUTE_ID | string;
 }) {
   const { user } = useAuth();
   const [paymentError, setPaymentError] = useState("");
@@ -45,8 +45,8 @@ export function CheckoutDialog({
   const [status, setStatus] = useState<"idle" | "processing" | "done">("idle");
 
   // Override title and price based on courseId for internal consistency
-  const actualTitle = courseId === TESTING_ID ? TESTING_TITLE : courseId === INTERNSHIP_ID ? INTERNSHIP_TITLE : title;
-  const actualPrice = courseId === TESTING_ID ? TESTING_PRICE_INR : courseId === INTERNSHIP_ID ? INTERNSHIP_PRICE_INR : price;
+  const actualTitle = courseId === TESTING_ID ? TESTING_TITLE : courseId === INTERNSHIP_ID ? INTERNSHIP_TITLE : courseId === OMNIROUTE_ID ? OMNIROUTE_TITLE : title;
+  const actualPrice = courseId === TESTING_ID ? TESTING_PRICE_INR : courseId === INTERNSHIP_ID ? INTERNSHIP_PRICE_INR : courseId === OMNIROUTE_ID ? OMNIROUTE_PRICE_INR : price;
 
   const isValidEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
