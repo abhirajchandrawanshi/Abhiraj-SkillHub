@@ -50,7 +50,9 @@ function getAdminFirestore() {
     }),
   });
 
-  return getFirestore(app);
+  const db = getFirestore(app);
+  try { db.settings({ preferRest: true }); } catch (e) {}
+  return db;
 }
 
 // ── Server function: Upload a course PDF ──────────────────────────────

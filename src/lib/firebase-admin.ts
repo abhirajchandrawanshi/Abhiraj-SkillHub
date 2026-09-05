@@ -36,6 +36,7 @@ export function initializeFirebaseAdmin() {
     });
 
     adminDb = admin.firestore();
+    adminDb.settings({ preferRest: true });
     adminAuth = admin.auth();
 
     console.log("✅ Firebase Admin SDK initialized successfully");

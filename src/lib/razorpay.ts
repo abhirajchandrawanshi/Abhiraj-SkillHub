@@ -100,7 +100,9 @@ function getAdminFirestore() {
     });
 
     console.log("Firebase Admin SDK initialized successfully");
-    return getFirestore(app);
+    const db = getFirestore(app);
+    try { db.settings({ preferRest: true }); } catch (e) { /* ignore if already set */ }
+    return db;
   } catch (error) {
     console.error("Failed to initialize Firebase Admin SDK:", error);
     throw error;

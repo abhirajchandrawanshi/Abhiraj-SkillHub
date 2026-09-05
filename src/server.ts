@@ -1,4 +1,13 @@
 import "./lib/error-capture";
+import { fileURLToPath } from "url";
+import path from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+if (typeof globalThis !== 'undefined') {
+  (globalThis as any).__filename = __filename;
+  (globalThis as any).__dirname = __dirname;
+}
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
