@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 
 import { 
-  COURSE_ACCESS_EVENT, 
-  INTERNSHIP_ACCESS_EVENT,
   hasCourseAccess, 
   readCourseAccess, 
   restoreAccessFromFirestore,
@@ -10,13 +8,12 @@ import {
   type CourseAccess 
 } from "@/lib/access";
 import { useAuth } from "@/hooks/use-auth";
-import { COURSE_ID, INTERNSHIP_ID, TESTING_ID } from "@/lib/course";
 
-export function useCourseAccess(courseId: string = COURSE_ID) {
+export function useCourseAccess(courseId: string) {
   const [access, setAccess] = useState<CourseAccess | null>(null);
   const [ready, setReady] = useState(false);
   const { user } = useAuth();
-  const event = courseId === INTERNSHIP_ID ? INTERNSHIP_ACCESS_EVENT : COURSE_ACCESS_EVENT;
+  const event = `course-access-changed-${courseId}`;
 
   useEffect(() => {
     const sync = () => {
@@ -26,7 +23,7 @@ export function useCourseAccess(courseId: string = COURSE_ID) {
       if (localAccess && isAccessExpired(localAccess)) {
         console.log("Local access has expired, clearing:", localAccess);
         // Clear expired access from localStorage
-        const accessKey = courseId === INTERNSHIP_ID ? `course-access:${INTERNSHIP_ID}` : `course-access:${COURSE_ID}`;
+        const accessKey = `course-access:${courseId}`;
         localStorage.removeItem(accessKey);
         setAccess(null);
       } else {

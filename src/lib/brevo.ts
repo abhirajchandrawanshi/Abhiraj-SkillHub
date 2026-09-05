@@ -1,7 +1,48 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
 
-import { COURSE_ID, INTERNSHIP_ID, COURSE_TITLE, INTERNSHIP_TITLE, TESTING_ID, TESTING_TITLE, OMNIROUTE_ID } from "@/lib/course";
+
+
+// Initialize Firebase Admin SDK for server-side Firestore access
+function getAdminFirestore() {
+  if (getApps().length > 0) {
+    return getFirestore();
+  }
+
+  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+  if (!privateKey || !process.env.FIREBASE_ADMIN_PROJECT_ID || !process.env.FIREBASE_ADMIN_CLIENT_EMAIL) {
+    throw new Error("Firebase Admin credentials not configured");
+  }
+
+  const app = initializeApp({
+    credential: cert({
+      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+      privateKey: privateKey,
+      clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+    }),
+  });
+
+  return getFirestore(app);
+}
+
+// Server-side course fetch using Admin SDK
+async function getCourseByIdServer(courseId: string) {
+  const db = getAdminFirestore();
+  const docRef = db.collection("courses").doc(courseId);
+  const snap = await docRef.get();
+
+  if (!snap.exists) {
+    return null;
+  }
+
+  return {
+    id: snap.id,
+    ...snap.data(),
+  } as any;
+}
 
 const emailSchema = z.object({
   to: z.string().email(),
@@ -86,10 +127,19 @@ async function sendEmail(to: string, subject: string, html: string) {
   }
 }
 
-function createCourseEmailTemplate(userEmail: string, userName: string) {
-  const subject = `🎉 Your Python Notes - Access Granted!`;
+
+
+function createDynamicCourseEmailTemplate(userEmail: string, userName: string, course: any) {
+  const subject = `🎉 Your ${course.title} - Access Granted!`;
   const websiteUrl = getWebsiteUrl();
-  const pdfUrl = `${websiteUrl}/python-interview-questions.pdf`;
+  
+  // Create a proper resource URL if it's a relative path (like /python-interview-questions.pdf)
+  let resourceUrl = course.accessInfo;
+  if (resourceUrl && resourceUrl.startsWith('/')) {
+    resourceUrl = `${websiteUrl}${resourceUrl}`;
+  }
+  
+  const isResourceLink = resourceUrl && (resourceUrl.startsWith('http') || resourceUrl.startsWith('/'));
   
   const html = `
     <!DOCTYPE html>
@@ -97,7 +147,7 @@ function createCourseEmailTemplate(userEmail: string, userName: string) {
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Python Notes Access</title>
+      <title>${course.title} Access</title>
       <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -111,223 +161,36 @@ function createCourseEmailTemplate(userEmail: string, userName: string) {
       <div class="container">
         <div class="header">
           <h1>🎉 Payment Successful!</h1>
-          <p>Your Python Notes are now unlocked</p>
+          <p>Your ${course.title} is now unlocked</p>
         </div>
         <div class="content">
           <p>Hi ${userName},</p>
-          <p>Thank you for your purchase! Your payment for <strong>Python Notes</strong> has been successfully processed.</p>
+          <p>Thank you for your purchase! Your payment for <strong>${course.title}</strong> has been successfully processed.</p>
           
-          <h2>📚 What You Get:</h2>
+          <h2>📚 Course Details:</h2>
           <ul>
-            <li>Complete Python Notes from basics to advanced</li>
-            <li>Well-structured content for easy learning</li>
-            <li>Lifetime access to all materials</li>
-            <li>Downloadable PDF format</li>
+            <li><strong>Course:</strong> ${course.title}</li>
           </ul>
           
-          <p>You can access your Python Notes PDF directly here:</p>
-          <a href="${pdfUrl}" class="button">Download Python Notes PDF</a>
+          <p><strong>Description:</strong></p>
+          <p>${course.description}</p>
+          
+          ${course.pdfPath 
+            ? `<p>Your course includes a PDF resource. You can access it by logging into your account at:</p><a href="${websiteUrl}" class="button">Access Course Resource</a>` 
+            : ''}
+          ${isResourceLink 
+            ? `<p>You can also access your external resource directly here:</p><a href="${resourceUrl}" class="button">External Resource Link</a>` 
+            : (course.accessInfo ? `<p><strong>Access Information:</strong></p><p>${course.accessInfo}</p>` : '')}
           
           <p><strong>Login Details:</strong></p>
           <p>Email: ${userEmail}</p>
+          
+          <p>You can also access your course by logging into your account at:</p>
+          <a href="${websiteUrl}" class="button">Go to Website</a>
           
           <p>If you have any questions or need assistance, feel free to reach out to our support team.</p>
           
           <p>Happy learning! 🚀</p>
-          
-          <div class="footer">
-            <p>© 2026 Abhiraj Courses. All rights reserved.</p>
-            <p>This is an automated email, please do not reply.</p>
-          </div>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-
-  return { subject, html };
-}
-
-function createInternshipEmailTemplate(userEmail: string, userName: string) {
-  const subject = `🎉 Your 100+ Paid Internships List - Access Granted!`;
-  const internshipSheetUrl = "https://docs.google.com/spreadsheets/d/14YFhJa9aGHbBhCmY2cI5YtOGs3NBO1n3DT0fTVwc_DM/edit?usp=drivesdk";
-  
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Internships List Access</title>
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-        .button { display: inline-block; padding: 15px 30px; background: #f5576c; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>🎉 Payment Successful!</h1>
-          <p>Your 100+ Paid Internships List is now unlocked</p>
-        </div>
-        <div class="content">
-          <p>Hi ${userName},</p>
-          <p>Thank you for your purchase! Your payment for <strong>100+ Paid Internships</strong> has been successfully processed.</p>
-          
-          <h2>💼 What You Get:</h2>
-          <ul>
-            <li>Curated list of 100+ paid internship opportunities</li>
-            <li>Company details and contact information</li>
-            <li>Stipend information for each position</li>
-            <li>Direct application links</li>
-            <li>Regular updates with new opportunities</li>
-          </ul>
-          
-          <p>You can access the complete internships list directly here:</p>
-          <a href="${internshipSheetUrl}" class="button">Access Internships List (Google Sheets)</a>
-          
-          <p><strong>Login Details:</strong></p>
-          <p>Email: ${userEmail}</p>
-          
-          <p>Featured opportunities include positions at companies like Faabit Designs, Nsse Fab, DeepThought CultureTech, and many more!</p>
-          
-          <p>If you have any questions or need assistance, feel free to reach out to our support team.</p>
-          
-          <p>Best of luck with your applications! 🚀</p>
-          
-          <div class="footer">
-            <p>© 2026 Abhiraj Courses. All rights reserved.</p>
-            <p>This is an automated email, please do not reply.</p>
-          </div>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-
-  return { subject, html };
-}
-
-function createTestingEmailTemplate(userEmail: string, userName: string) {
-  const subject = `🧪 Testing Course Access Granted`;
-  const websiteUrl = getWebsiteUrl();
-  
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Testing Course Access</title>
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-        .button { display: inline-block; padding: 15px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
-        .warning { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin: 20px 0; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>🧪 Testing Course Access Granted</h1>
-          <p>Payment & Access Testing Course - ₹1 Test</p>
-        </div>
-        <div class="content">
-          <p>Hi ${userName},</p>
-          <p>Thank you for testing the payment system! Your ₹1 test payment for the <strong>Payment & Access Testing Course</strong> has been successfully processed.</p>
-          
-          <div class="warning">
-            <p><strong>⚠️ REMINDER:</strong> This is a testing course only. The ₹1 payment was for testing purposes to verify the complete payment and access flow.</p>
-          </div>
-          
-          <h2>🧪 What Was Tested:</h2>
-          <ul>
-            <li>Razorpay payment integration (₹1 test payment)</li>
-            <li>Server-side payment verification</li>
-            <li>Firestore purchase recording</li>
-            <li>Course access restoration</li>
-            <li>Email delivery system</li>
-            <li>Access persistence (refresh/login/logout)</li>
-          </ul>
-          
-          <p>Your access to the testing course is now active. You can test the complete flow including:</p>
-          <ul>
-            <li>Page refresh access persistence</li>
-            <li>Login/logout access behavior</li>
-            <li>Guest vs authenticated user access</li>
-          </ul>
-          
-          <p><strong>Login Details:</strong></p>
-          <p>Email: ${userEmail}</p>
-          
-          <p>This test confirms that the production payment and access system is working correctly.</p>
-          
-          <div class="footer">
-            <p>© 2026 Abhiraj Courses. All rights reserved.</p>
-            <p>This is an automated email, please do not reply.</p>
-          </div>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-
-  return { subject, html };
-}
-
-function createOmnirouteEmailTemplate(userEmail: string, userName: string) {
-  const subject = `🎉 Your OmniRoute Setup Guide - Access Granted!`;
-  const driveUrl = "https://drive.google.com/file/d/1FgyD5AFVnuVEGp7XqiE3H5DlAkLEYKPB/view?usp=sharing";
-  
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>OmniRoute Setup Access</title>
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #0d9488 0%, #115e59 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-        .button { display: inline-block; padding: 15px 30px; background: #0d9488; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>🎉 Payment Successful!</h1>
-          <p>Your OmniRoute Setup Guide is now unlocked</p>
-        </div>
-        <div class="content">
-          <p>Hi ${userName},</p>
-          <p>Thank you for your purchase! Your payment for <strong>OmniRoute Setup for Free Claude Tokens</strong> has been successfully processed.</p>
-          
-          <h2>🤖 What You Get:</h2>
-          <ul>
-            <li>Easy 4 step setup guide</li>
-            <li>Get 1.5 Billion AI tokens each month completely FREE</li>
-            <li>Direct access to the setup resource</li>
-          </ul>
-          
-          <p>You can access the setup guide directly here:</p>
-          <a href="${driveUrl}" class="button">Access Setup Guide (Google Drive)</a>
-          
-          <p><strong>Login Details:</strong></p>
-          <p>Email: ${userEmail}</p>
-          
-          <p>If you have any questions or need assistance, feel free to reach out to our support team.</p>
-          
-          <p>Happy prompting! 🚀</p>
           
           <div class="footer">
             <p>© 2026 Abhiraj Courses. All rights reserved.</p>
@@ -353,17 +216,18 @@ export const sendResourceEmail = createServerFn({ method: "POST" })
     
     let emailTemplate;
     
-    if (data.courseId === COURSE_ID) {
-      emailTemplate = createCourseEmailTemplate(data.email, data.name);
-    } else if (data.courseId === INTERNSHIP_ID) {
-      emailTemplate = createInternshipEmailTemplate(data.email, data.name);
-    } else if (data.courseId === TESTING_ID) {
-      emailTemplate = createTestingEmailTemplate(data.email, data.name);
-    } else if (data.courseId === OMNIROUTE_ID) {
-      emailTemplate = createOmnirouteEmailTemplate(data.email, data.name);
-    } else {
-      console.error("Unknown courseId:", data.courseId);
-      return { success: false, error: "Unknown course ID" };
+    // Handle dynamic courses - fetch course data from Firestore using Admin SDK
+    try {
+      console.log("Fetching dynamic course data for email:", data.courseId);
+      const course = await getCourseByIdServer(data.courseId);
+      if (!course) {
+        console.error("Failed to fetch course data for email:", data.courseId);
+        return { success: false, error: "Course not found" };
+      }
+      emailTemplate = createDynamicCourseEmailTemplate(data.email, data.name, course);
+    } catch (error) {
+      console.error("Error fetching dynamic course for email:", error);
+      return { success: false, error: "Failed to fetch course data" };
     }
 
     const result = await sendEmail(data.email, emailTemplate.subject, emailTemplate.html);

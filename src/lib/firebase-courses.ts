@@ -1,4 +1,4 @@
-import { db } from "@/firebase";
+import { getDb } from "@/firebase";
 import {
   collection,
   doc,
@@ -9,6 +9,15 @@ import {
   query,
   where,
 } from "firebase/firestore";
+
+// Helper function to get db instance safely
+function getDbSafe() {
+  const db = getDb();
+  if (!db) {
+    throw new Error("Firestore is not initialized. Make sure you are on the client side.");
+  }
+  return db;
+}
 
 // Course type matching the Firestore structure (compatible with admin Course type)
 export type Course = {
@@ -32,6 +41,13 @@ export type Course = {
   accessInfo?: string;
   metaTitle?: string;
   metaDescription?: string;
+  // Course PDF (stored in Supabase Storage `course-pdfs` bucket)
+  pdfPath?: string;
+  // External resource links (YouTube, GitHub, docs, etc.)
+  resources?: { label: string; url: string }[];
+  rating?: number;
+  ratingCount?: number;
+  publishedDate?: string;
 };
 
 // Course metadata details (from course.ts)
@@ -58,16 +74,14 @@ export type Module = {
   lessons: Lesson[];
 };
 
-// Collection reference
-const coursesCollection = collection(db, "courses");
-const enrollmentsCollection = collection(db, "enrollments");
-
 // ===== COURSE OPERATIONS =====
 
 /**
  * Get a course by slug
  */
 export async function getCourseBySlug(slug: string): Promise<Course | null> {
+  const db = getDbSafe();
+  const coursesCollection = collection(db, "courses");
   const q = query(coursesCollection, where("slug", "==", slug));
   const snapshot = await getDocs(q);
 
@@ -86,6 +100,7 @@ export async function getCourseBySlug(slug: string): Promise<Course | null> {
  * Get course by ID
  */
 export async function getCourseById(courseId: string): Promise<Course | null> {
+  const db = getDbSafe();
   const docRef = doc(db, "courses", courseId);
   const snap = await getDoc(docRef);
 
@@ -103,6 +118,8 @@ export async function getCourseById(courseId: string): Promise<Course | null> {
  * Get all published courses
  */
 export async function getPublishedCourses(): Promise<Course[]> {
+  const db = getDbSafe();
+  const coursesCollection = collection(db, "courses");
   const q = query(coursesCollection, where("status", "==", "published"));
   const snapshot = await getDocs(q);
   return snapshot.docs.map((doc) => ({
@@ -115,6 +132,8 @@ export async function getPublishedCourses(): Promise<Course[]> {
  * Set a course (used for initial setup or adding new courses)
  */
 export async function setCourse(course: Course): Promise<void> {
+  const db = getDbSafe();
+  const coursesCollection = collection(db, "courses");
   const docRef = doc(coursesCollection, course.id);
   await setDoc(docRef, {
     ...course,
@@ -132,7 +151,8 @@ export async function enrollUser(
   courseId: string,
   paymentId: string
 ): Promise<string> {
-  const docRef = doc(enrollmentsCollection);
+  const db = getDbSafe();
+  const enrollmentsCollection = collection(db, "enrollments");
   const enrollmentData = {
     userId,
     courseId,
@@ -140,7 +160,7 @@ export async function enrollUser(
     purchasedAt: new Date().toISOString(),
   };
 
-  await addDoc(docRef, enrollmentData);
+  const docRef = await addDoc(enrollmentsCollection, enrollmentData);
   return docRef.id;
 }
 
@@ -148,6 +168,8 @@ export async function enrollUser(
  * Check if a user is enrolled in a course
  */
 export async function isUserEnrolled(userId: string, courseId: string): Promise<boolean> {
+  const db = getDbSafe();
+  const enrollmentsCollection = collection(db, "enrollments");
   const q = query(
     enrollmentsCollection,
     where("userId", "==", userId),
@@ -161,6 +183,8 @@ export async function isUserEnrolled(userId: string, courseId: string): Promise<
  * Get user's enrollments
  */
 export async function getUserEnrollments(userId: string): Promise<any[]> {
+  const db = getDbSafe();
+  const enrollmentsCollection = collection(db, "enrollments");
   const q = query(enrollmentsCollection, where("userId", "==", userId));
   const snapshot = await getDocs(q);
   return snapshot.docs.map((doc) => ({
@@ -176,6 +200,8 @@ export async function getEnrollment(
   userId: string,
   courseId: string
 ): Promise<any | null> {
+  const db = getDbSafe();
+  const enrollmentsCollection = collection(db, "enrollments");
   const q = query(
     enrollmentsCollection,
     where("userId", "==", userId),

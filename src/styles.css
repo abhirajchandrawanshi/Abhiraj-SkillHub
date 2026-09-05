@@ -30,6 +30,8 @@
   --radius-4xl: calc(var(--radius) + 16px);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  --color-tomorrow: var(--tomorrow);
+  --color-tomorrow-soft: var(--tomorrow-soft);
   --color-ink: var(--ink);
   --color-ink-foreground: var(--ink-foreground);
   --color-success: var(--success);
@@ -94,6 +96,8 @@
 
   --brand: oklch(0.87 0.2 128);
   --brand-foreground: oklch(0.24 0.06 150);
+  --tomorrow: oklch(0.59 0.155 38);
+  --tomorrow-soft: oklch(0.68 0.14 42);
   --ink: oklch(0.22 0.06 262);
   --ink-foreground: oklch(0.985 0.005 106);
   --success: oklch(0.58 0.15 152);
@@ -102,6 +106,7 @@
   --shadow-soft: 0 1px 2px oklch(0.21 0.03 260 / 0.04), 0 10px 30px -12px oklch(0.21 0.03 260 / 0.16);
   --shadow-lift: 0 20px 50px -20px oklch(0.21 0.03 260 / 0.28);
   --gradient-brand: linear-gradient(120deg, oklch(0.9 0.2 122), oklch(0.84 0.19 138));
+  --gradient-tomorrow: linear-gradient(135deg, #c95732 0%, #e07a4f 52%, #c95732 100%);
 
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -121,6 +126,9 @@
 .dark {
   --brand: oklch(0.87 0.2 128);
   --brand-foreground: oklch(0.24 0.06 150);
+  --tomorrow: oklch(0.72 0.15 38);
+  --tomorrow-soft: oklch(0.8 0.12 45);
+  --gradient-tomorrow: linear-gradient(135deg, #f08a62 0%, #e56a42 48%, #ffb089 100%);
   --ink: oklch(0.18 0.04 262);
   --ink-foreground: oklch(0.985 0.005 106);
   --success: oklch(0.65 0.15 152);
@@ -192,4 +200,15 @@
 
 @utility bg-gradient-brand {
   background-image: var(--gradient-brand);
+}
+
+@utility text-gradient-tomorrow {
+  background-image: var(--gradient-tomorrow);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.dark .text-gradient-tomorrow {
+  filter: drop-shadow(0 0 10px rgb(201 87 50 / 0.45));
 }

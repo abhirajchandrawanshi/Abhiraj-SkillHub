@@ -3,8 +3,6 @@ import { Menu } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { useCourseAccess } from "@/hooks/use-course-access";
-import { COURSE_PRICE_INR, INTERNSHIP_ID } from "@/lib/course";
 
 export const NAV_LINKS = [
   { label: "Home", to: "/", hash: "" },
@@ -16,7 +14,6 @@ export const NAV_LINKS = [
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
-  const { access } = useCourseAccess(INTERNSHIP_ID);
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur">
@@ -42,17 +39,11 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-2">
-          {access ? (
-            <Button variant="brand" size="sm" asChild>
-              <Link to="/learn">Continue</Link>
-            </Button>
-          ) : (
-            <Button variant="brand" size="sm" asChild>
-              <Link to="/" hash="enroll">
-                Enroll · ₹{COURSE_PRICE_INR}
-              </Link>
-            </Button>
-          )}
+          <Button variant="brand" size="sm" asChild>
+            <Link to="/" hash="course">
+              View Courses
+            </Link>
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -80,12 +71,12 @@ export function SiteHeader() {
             </Link>
           ))}
           <Link
-            to={access ? "/learn" : "/"}
-            hash={access ? undefined : "enroll"}
+            to="/"
+            hash="course"
             onClick={() => setOpen(false)}
             className="rounded-lg px-3 py-2 text-sm font-semibold"
           >
-            {access ? "Open classroom" : `Enroll — ₹${COURSE_PRICE_INR}`}
+            View Courses
           </Link>
         </nav>
       ) : null}

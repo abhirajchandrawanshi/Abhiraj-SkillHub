@@ -1,19 +1,44 @@
 # Admin Panel Setup Instructions
 
-## IMPORTANT: Add Admin Credentials to Your .env File
+## IMPORTANT: Firebase Authentication Setup
 
-The admin panel requires environment variables for authentication. Add the following to your `.env` file:
+The admin panel now uses Firebase Authentication for secure access. The admin user must be created in Firebase Authentication.
+
+### Step 1: Create Admin User
+
+Run the setup script to create the admin user in Firebase Authentication:
+
+```bash
+npm run setup-admin
+```
+
+This will create a user with the credentials from your `.env` file:
+- `ADMIN_EMAIL=admin@abhirajcourses.com`
+- `ADMIN_PASSWORD=Admin@123456`
+
+### Step 2: Update Firestore Security Rules
+
+Update your Firestore security rules in the Firebase Console to only allow the admin user to write to courses:
+
+1. Go to Firebase Console → Firestore Database → Rules
+2. Replace with the content from `firestore.rules` file
+3. Click "Publish"
+
+### Step 3: Environment Variables
+
+Make sure your `.env` file contains the admin credentials for the setup script:
 
 ```env
-# Admin Configuration
+# Admin Configuration (for setup script only)
 ADMIN_EMAIL=admin@abhirajcourses.com
 ADMIN_PASSWORD=Admin@123456
 ```
 
 **Security Notes:**
-- Change the default email and password to something secure
+- Change the default password to something secure
 - Never commit your `.env` file to version control
 - Use a strong password with at least 12 characters, including uppercase, lowercase, numbers, and special characters
+- The admin credentials are only used during setup; authentication uses Firebase Auth
 
 ## Admin Panel Features
 

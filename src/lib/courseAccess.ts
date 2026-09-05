@@ -1,4 +1,4 @@
-import { db } from "@/firebase";
+import { getDb } from "@/firebase";
 import {
   collection,
   query,
@@ -10,6 +10,15 @@ import {
   setDoc,
 } from "firebase/firestore";
 
+// Helper function to get db instance safely
+function getDbSafe() {
+  const db = getDb();
+  if (!db) {
+    throw new Error("Firestore is not initialized. Make sure you are on the client side.");
+  }
+  return db;
+}
+
 // ===== COURSE ACCESS MANAGEMENT =====
 
 /**
@@ -17,6 +26,7 @@ import {
  */
 export async function getCourseAccess(email: string, courseId: string) {
   try {
+    const db = getDbSafe();
     const accessRef = collection(db, "courseAccess");
     const q = query(accessRef, where("email", "==", email), where("courseId", "==", courseId));
     const snapshot = await getDocs(q);
@@ -44,6 +54,7 @@ export async function saveCourseAccess(
   orderId: string
 ) {
   try {
+    const db = getDbSafe();
     const accessRef = collection(db, "courseAccess");
     const q = query(accessRef, where("email", "==", email), where("courseId", "==", courseId));
     const snapshot = await getDocs(q);
@@ -98,6 +109,7 @@ export async function getCourseAccessByEmailAndCourse(email: string, courseId: s
  */
 export async function createEnrollment(email: string, courseId: string, paymentId: string, orderId: string) {
   try {
+    const db = getDbSafe();
     const enrollmentRef = collection(db, "enrollments");
     const enrollmentData = {
       userId: email, // Using email as userId for compatibility

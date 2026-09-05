@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, Lock, ShieldCheck, CheckCircle2, Mail } from "lucide-react";
+import { createSignedPdfUrl } from "@/lib/supabase-server";
 
-import { COURSE_ID, INTERNSHIP_ID, TESTING_ID, TESTING_TITLE, TESTING_PRICE_INR, INTERNSHIP_TITLE, INTERNSHIP_PRICE_INR, COURSE_TITLE, COURSE_PRICE_INR, OMNIROUTE_ID, OMNIROUTE_TITLE, OMNIROUTE_PRICE_INR } from "@/lib/course";
+
 import { loadRazorpayCheckout } from "@/lib/load-razorpay";
 import { createRazorpayOrder, verifyRazorpayPayment } from "@/lib/razorpay";
 import { sendResourceEmail } from "@/lib/brevo";
 import type { CourseAccess } from "@/lib/access";
 import { grantFirestoreAccess, grantCourseAccess } from "@/lib/access";
+
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,14 +30,18 @@ export function CheckoutDialog({
   price,
   title,
   onPaymentSuccess,
-  courseId = COURSE_ID,
+  courseId,
+  accessInfo,
+  pdfPath,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   price: number;
   title: string;
   onPaymentSuccess: (access: CourseAccess) => void;
-  courseId?: typeof COURSE_ID | typeof INTERNSHIP_ID | typeof TESTING_ID | typeof OMNIROUTE_ID | string;
+  courseId: string;
+  accessInfo?: string;
+  pdfPath?: string;
 }) {
   const { user } = useAuth();
   const [paymentError, setPaymentError] = useState("");
@@ -43,10 +49,6 @@ export function CheckoutDialog({
   const [emailError, setEmailError] = useState("");
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "processing" | "done">("idle");
-
-  // Override title and price based on courseId for internal consistency
-  const actualTitle = courseId === TESTING_ID ? TESTING_TITLE : courseId === INTERNSHIP_ID ? INTERNSHIP_TITLE : courseId === OMNIROUTE_ID ? OMNIROUTE_TITLE : title;
-  const actualPrice = courseId === TESTING_ID ? TESTING_PRICE_INR : courseId === INTERNSHIP_ID ? INTERNSHIP_PRICE_INR : courseId === OMNIROUTE_ID ? OMNIROUTE_PRICE_INR : price;
 
   const isValidEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -73,6 +75,8 @@ export function CheckoutDialog({
       const userName = email.split('@')[0] || "Guest";
       const userEmail = email;
 
+      console.log("Creating Razorpay order with:", { courseId, actualTitle: title, actualPrice: price });
+      
       const order = await createRazorpayOrder({
         data: {
           courseId: courseId,
@@ -91,7 +95,7 @@ export function CheckoutDialog({
         amount: order.amount,
         currency: order.currency,
         name: userName,
-        description: actualTitle,
+        description: title,
         order_id: order.orderId,
         modal: {
           ondismiss: function() {
@@ -99,7 +103,7 @@ export function CheckoutDialog({
             setStatus("idle");
           },
         },
-        theme: { color: courseId === TESTING_ID ? "#dc2626" : "#e85d04" },
+        theme: { color: courseId === "testing" ? "#dc2626" : "#e85d04" },
         handler: async (response) => {
           try {
             console.log("Razorpay success handler called:", {
@@ -220,6 +224,33 @@ export function CheckoutDialog({
       }, 200);
   };
 
+  const handleAccessNow = async () => {
+    // If the course has a PDF, generate a signed URL
+    if (pdfPath) {
+      try {
+        const userId = user?.uid || email;
+        if (!userId) {
+          close(false);
+          return;
+        }
+        const result = await createSignedPdfUrl({
+          data: {
+            courseId,
+            pdfPath,
+            userId,
+          },
+        });
+        window.open(result.signedUrl, "_blank");
+      } catch (err) {
+        console.error("Failed to get signed PDF URL:", err);
+        // Fall through to close
+      }
+    } else if (accessInfo && (accessInfo.startsWith("http") || accessInfo.startsWith("/"))) {
+      window.open(accessInfo, "_blank");
+    }
+    close(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={close}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
@@ -228,7 +259,7 @@ export function CheckoutDialog({
             <CheckCircle2 className="mx-auto h-14 w-14 text-success" />
             <DialogTitle className="mt-4 text-2xl">Payment successful</DialogTitle>
             <DialogDescription className="mt-2">
-              Your payment is verified. The complete PDF is now unlocked.
+              Your payment is verified. Your course content is now unlocked.
             </DialogDescription>
             
             {emailStatus === "success" && (
@@ -248,7 +279,7 @@ export function CheckoutDialog({
               </div>
             )}
             
-            <Button className="mt-6 w-full" size="lg" onClick={() => close(false)}>
+            <Button className="mt-6 w-full" size="lg" onClick={handleAccessNow}>
               Access Now
             </Button>
           </div>
@@ -256,12 +287,12 @@ export function CheckoutDialog({
           <form onSubmit={submit}>
             <DialogHeader>
               <DialogTitle className="text-2xl">
-                {courseId === TESTING_ID ? "Testing Course Checkout" : "Secure checkout"}
+                {courseId === "testing" ? "Testing Course Checkout" : "Secure checkout"}
               </DialogTitle>
               <DialogDescription>
-                {courseId === TESTING_ID 
+                {courseId === "testing" 
                   ? "This is a ₹1 test payment to verify the complete payment and access system."
-                  : `${actualTitle} — one-time payment, lifetime access.`
+                  : `${title} — one-time payment, lifetime access.`
                 }
               </DialogDescription>
             </DialogHeader>
@@ -298,7 +329,7 @@ export function CheckoutDialog({
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Total due today</span>
               <span className="font-display text-2xl font-bold">
-                ₹{actualPrice.toLocaleString("en-IN")}
+                ₹{price.toLocaleString("en-IN")}
               </span>
             </div>
 
@@ -314,7 +345,7 @@ export function CheckoutDialog({
                 </>
               ) : (
                 <>
-                  <Lock className="h-4 w-4" /> Pay ₹{actualPrice.toLocaleString("en-IN")}
+                  <Lock className="h-4 w-4" /> Pay ₹{price.toLocaleString("en-IN")}
                 </>
               )}
             </Button>

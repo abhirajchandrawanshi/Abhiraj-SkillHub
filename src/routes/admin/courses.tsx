@@ -43,14 +43,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
-  getCourses,
-  deleteCourse,
-  toggleCourseStatus,
+  getCoursesClient,
+  deleteCourseClient,
+  toggleCourseStatusClient,
   type Course,
 } from "@/lib/admin";
 import { CourseFormDialog } from "@/components/CourseFormDialog";
 import { AdminShell } from "@/components/AdminShell";
-import { auth } from "@/firebase";
+import { useAdminAuth } from "@/hooks/use-admin-auth";
 
 export const Route = createFileRoute("/admin/courses")({
   head: () => ({ meta: [{ title: "Courses | Admin" }] }),
@@ -58,6 +58,7 @@ export const Route = createFileRoute("/admin/courses")({
 });
 
 function AdminCourses() {
+  const { isAdmin, adminUser } = useAdminAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<
@@ -75,21 +76,24 @@ function AdminCourses() {
   } = useQuery({
     queryKey: ["admin-courses"],
     queryFn: async () => {
-      const idToken = await auth.currentUser?.getIdToken();
-      if (!idToken) throw new Error("Not authenticated");
-      return getCourses({ idToken });
+      if (!isAdmin || !adminUser) throw new Error("Not authenticated as admin");
+      if (typeof window === 'undefined') throw new Error("Cannot fetch on server");
+      
+      return getCoursesClient();
     },
+    enabled: isAdmin && !!adminUser && typeof window !== 'undefined',
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (courseId: string) => {
-      const idToken = await auth.currentUser?.getIdToken();
-      if (!idToken) throw new Error("Not authenticated");
-      await deleteCourse({ id: courseId, idToken });
+      if (!isAdmin || !adminUser) throw new Error("Not authenticated as admin");
+      
+      await deleteCourseClient(courseId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-courses"] });
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["published-courses"] });
       setDeleteDialogOpen(false);
       setCourseToDelete(null);
     },
@@ -103,13 +107,14 @@ function AdminCourses() {
       id: string;
       status: "published" | "draft";
     }) => {
-      const idToken = await auth.currentUser?.getIdToken();
-      if (!idToken) throw new Error("Not authenticated");
-      await toggleCourseStatus({ id, status, idToken });
+      if (!isAdmin || !adminUser) throw new Error("Not authenticated as admin");
+      
+      await toggleCourseStatusClient(id, status);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-courses"] });
       queryClient.invalidateQueries({ queryKey: ["admin-dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["published-courses"] });
     },
   });
 
@@ -118,8 +123,7 @@ function AdminCourses() {
   const filteredCourses = courses.filter((course) => {
     const matchesSearch =
       course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      course.instructor.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      course.category.toLowerCase().includes(searchQuery.toLowerCase());
+      course.instructor.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus =
       statusFilter === "all" || course.status === statusFilter;
@@ -228,7 +232,6 @@ function AdminCourses() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Course</TableHead>
-                      <TableHead>Category</TableHead>
                       <TableHead>Price</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Created</TableHead>
@@ -255,9 +258,7 @@ function AdminCourses() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{course.category}</Badge>
-                        </TableCell>
+
                         <TableCell>
                           <div className="font-medium">₹{course.price}</div>
                           {course.originalPrice &&
@@ -282,9 +283,11 @@ function AdminCourses() {
                         </TableCell>
                         <TableCell>
                           <div className="text-sm text-muted-foreground">
-                            {course.createdAt?.toDate
+                            {course.createdAt
                               ? new Date(
-                                  course.createdAt.toDate(),
+                                  typeof course.createdAt === 'string' 
+                                    ? course.createdAt 
+                                    : course.createdAt.toDate?.() || course.createdAt
                                 ).toLocaleDateString()
                               : "—"}
                           </div>
@@ -347,6 +350,7 @@ function AdminCourses() {
             queryClient.invalidateQueries({
               queryKey: ["admin-dashboard-stats"],
             });
+            queryClient.invalidateQueries({ queryKey: ["published-courses"] });
           }}
         />
 
@@ -362,6 +366,7 @@ function AdminCourses() {
             queryClient.invalidateQueries({
               queryKey: ["admin-dashboard-stats"],
             });
+            queryClient.invalidateQueries({ queryKey: ["published-courses"] });
             setEditingCourse(null);
           }}
         />

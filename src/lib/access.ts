@@ -1,4 +1,4 @@
-import { db } from "@/firebase";
+import { getDb } from "@/firebase";
 import {
   collection,
   query,
@@ -8,7 +8,16 @@ import {
   setDoc,
   onSnapshot,
 } from "firebase/firestore";
-import { COURSE_ID, INTERNSHIP_ID, TESTING_ID } from "@/lib/course";
+
+
+// Helper function to get db instance safely
+function getDbSafe() {
+  const db = getDb();
+  if (!db) {
+    throw new Error("Firestore is not initialized. Make sure you are on the client side.");
+  }
+  return db;
+}
 
 export type CourseAccess = {
   userId: string;
@@ -30,26 +39,11 @@ export function isAccessExpired(access: CourseAccess): boolean {
   return now > expiryDate;
 }
 
-const ACCESS_KEY = `course-access:${COURSE_ID}`;
-const EMAIL_KEY = `course-access-email:${COURSE_ID}`;
-const PROGRESS_KEY = `course-progress:${COURSE_ID}`;
-export const COURSE_ACCESS_EVENT = "course-access-changed";
-
-const INTERNSHIP_ACCESS_KEY = `course-access:${INTERNSHIP_ID}`;
-const INTERNSHIP_EMAIL_KEY = `course-access-email:${INTERNSHIP_ID}`;
-const INTERNSHIP_PROGRESS_KEY = `course-progress:${INTERNSHIP_ID}`;
-export const INTERNSHIP_ACCESS_EVENT = "internship-access-changed";
-
-const TESTING_ACCESS_KEY = `course-access:${TESTING_ID}`;
-const TESTING_EMAIL_KEY = `course-access-email:${TESTING_ID}`;
-const TESTING_PROGRESS_KEY = `course-progress:${TESTING_ID}`;
-export const TESTING_ACCESS_EVENT = "testing-access-changed";
-
 /** Check local storage for access (legacy/fallback support) */
-export function readCourseAccess(courseId: string = COURSE_ID): CourseAccess | null {
+export function readCourseAccess(courseId: string): CourseAccess | null {
   if (typeof window === "undefined") return null;
-  const accessKey = courseId === INTERNSHIP_ID ? INTERNSHIP_ACCESS_KEY : courseId === TESTING_ID ? TESTING_ACCESS_KEY : ACCESS_KEY;
-  const emailKey = courseId === INTERNSHIP_ID ? INTERNSHIP_EMAIL_KEY : courseId === TESTING_ID ? TESTING_EMAIL_KEY : EMAIL_KEY;
+  const accessKey = `course-access:${courseId}`;
+  const emailKey = `course-access-email:${courseId}`;
   
   const raw = window.localStorage.getItem(accessKey);
   if (!raw) return null;
@@ -87,14 +81,14 @@ export function readCourseAccess(courseId: string = COURSE_ID): CourseAccess | n
   return null;
 }
 
-export function hasCourseAccess(courseId: string = COURSE_ID) {
+export function hasCourseAccess(courseId: string) {
   return readCourseAccess(courseId) !== null;
 }
 
 export function grantCourseAccess(access: CourseAccess) {
-  const accessKey = access.courseId === INTERNSHIP_ID ? INTERNSHIP_ACCESS_KEY : access.courseId === TESTING_ID ? TESTING_ACCESS_KEY : ACCESS_KEY;
-  const emailKey = access.courseId === INTERNSHIP_ID ? INTERNSHIP_EMAIL_KEY : access.courseId === TESTING_ID ? TESTING_EMAIL_KEY : EMAIL_KEY;
-  const event = access.courseId === INTERNSHIP_ID ? INTERNSHIP_ACCESS_EVENT : access.courseId === TESTING_ID ? TESTING_ACCESS_EVENT : COURSE_ACCESS_EVENT;
+  const accessKey = `course-access:${access.courseId}`;
+  const emailKey = `course-access-email:${access.courseId}`;
+  const event = `course-access-changed-${access.courseId}`;
   
   window.localStorage.setItem(accessKey, JSON.stringify(access));
   window.localStorage.setItem(emailKey, access.email);
@@ -102,8 +96,9 @@ export function grantCourseAccess(access: CourseAccess) {
 }
 
 /** Check Firestore for course access (primary source of truth) */
-export async function checkFirestoreAccess(userId: string, courseId: string = COURSE_ID) {
+export async function checkFirestoreAccess(userId: string, courseId: string) {
   try {
+    const db = getDbSafe();
     const accessRef = collection(db, "courseAccess");
     const q = query(accessRef, where("userId", "==", userId), where("courseId", "==", courseId));
     const snapshot = await getDocs(q);
@@ -134,11 +129,12 @@ export async function checkFirestoreAccess(userId: string, courseId: string = CO
 /** Grant access in Firestore (called after successful payment verification) */
 export async function grantFirestoreAccess(
   access: CourseAccess,
-  courseId: string = COURSE_ID,
+  courseId: string,
   isGuest: boolean = false
 ) {
   try {
     console.log("Granting Firestore access:", { userId: access.userId, email: access.email, courseId, paymentId: access.paymentId, isGuest });
+    const db = getDbSafe();
     
     const accessRef = collection(db, "courseAccess");
     const q = query(accessRef, where("userId", "==", access.userId), where("courseId", "==", courseId));
@@ -147,12 +143,14 @@ export async function grantFirestoreAccess(
     // Calculate expiry for guest purchases (7 days from now)
     const expiresAt = isGuest ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined;
 
-    const accessData = {
+    const accessData: any = {
       ...access,
       courseId,
       grantedAt: new Date().toISOString(),
-      expiresAt, // Only set for guest purchases
     };
+    if (expiresAt) {
+      accessData.expiresAt = expiresAt;
+    }
 
     if (!snapshot.empty) {
       // Update existing record
@@ -167,7 +165,7 @@ export async function grantFirestoreAccess(
     }
 
     // Dispatch the correct event based on courseId
-    const event = courseId === INTERNSHIP_ID ? INTERNSHIP_ACCESS_EVENT : courseId === TESTING_ID ? TESTING_ACCESS_EVENT : COURSE_ACCESS_EVENT;
+    const event = `course-access-changed-${courseId}`;
     window.dispatchEvent(new Event(event));
     
     // Also update localStorage for immediate UI updates
@@ -185,8 +183,9 @@ export async function grantFirestoreAccess(
 }
 
 /** Check if user is enrolled in Firestore */
-export async function checkEnrollment(userId: string, courseId: string = COURSE_ID) {
+export async function checkEnrollment(userId: string, courseId: string) {
   try {
+    const db = getDbSafe();
     const enrollmentsRef = collection(db, "enrollments");
     const q = query(
       enrollmentsRef,
@@ -214,6 +213,7 @@ export async function saveEnrollment(
   orderId: string
 ) {
   try {
+    const db = getDbSafe();
     const enrollmentsRef = collection(db, "enrollments");
     const docRef = doc(enrollmentsRef);
     await setDoc(docRef, {
@@ -236,6 +236,7 @@ export function onAccessChange(
   courseId: string,
   callback: (access: CourseAccess | null) => void
 ) {
+  const db = getDbSafe();
   const accessRef = collection(db, "courseAccess");
   const q = query(accessRef, where("userId", "==", userId), where("courseId", "==", courseId));
   return onSnapshot(q, (snapshot) => {
@@ -271,7 +272,7 @@ export function onAccessChange(
 }
 
 /** Restore access from Firestore for a given user */
-export async function restoreAccessFromFirestore(userId: string, courseId: string = COURSE_ID) {
+export async function restoreAccessFromFirestore(userId: string, courseId: string) {
   try {
     console.log("Restoring access from Firestore for user:", userId, "course:", courseId);
     const access = await checkFirestoreAccess(userId, courseId);
@@ -294,6 +295,7 @@ export async function restoreAccessFromFirestore(userId: string, courseId: strin
 export async function migrateGuestPurchasesToAccount(firebaseUid: string, email: string) {
   try {
     console.log("Checking for guest purchases to migrate for:", email);
+    const db = getDbSafe();
     
     const accessRef = collection(db, "courseAccess");
     // Find guest purchases by email that don't have a Firebase UID
@@ -333,13 +335,16 @@ export async function migrateGuestPurchasesToAccount(firebaseUid: string, email:
 
     console.log("Successfully migrated all guest purchases to Firebase account");
   } catch (error) {
-    console.error("Error migrating guest purchases:", error);
+    // Don't throw error - this is a background operation that shouldn't break the app
+    console.error("Error migrating guest purchases (non-critical):", error);
+    // Silently fail to avoid breaking user experience
   }
 }
 
-export function readCompletedLessons(): string[] {
+export function readCompletedLessons(courseId: string): string[] {
   if (typeof window === "undefined") return [];
   try {
+    const PROGRESS_KEY = `course-progress:${courseId}`;
     const parsed = JSON.parse(window.localStorage.getItem(PROGRESS_KEY) ?? "[]") as unknown;
     return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
   } catch {
@@ -347,8 +352,9 @@ export function readCompletedLessons(): string[] {
   }
 }
 
-export function toggleLessonComplete(lessonId: string) {
-  const next = new Set(readCompletedLessons());
+export function toggleLessonComplete(courseId: string, lessonId: string) {
+  const PROGRESS_KEY = `course-progress:${courseId}`;
+  const next = new Set(readCompletedLessons(courseId));
   if (next.has(lessonId)) next.delete(lessonId);
   else next.add(lessonId);
   window.localStorage.setItem(PROGRESS_KEY, JSON.stringify([...next]));

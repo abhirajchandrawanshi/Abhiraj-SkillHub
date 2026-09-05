@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2 } from "lucide-react";
+import { Loader2, Upload, Plus, Trash2, FileText, Link as LinkIcon } from "lucide-react";
+import { uploadToSupabase } from "@/lib/supabase-storage";
+import { uploadCoursePdf } from "@/lib/supabase-server";
 
 import {
   Dialog,
@@ -23,7 +25,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { createCourse, updateCourse, type Course } from "@/lib/admin";
+import { createCourseClient, updateCourseClient, type Course } from "@/lib/admin";
+import { useAdminAuth } from "@/hooks/use-admin-auth";
+
+const resourceSchema = z.object({
+  label: z.string().min(1, "Label is required"),
+  url: z.string().url("Must be a valid URL"),
+});
 
 const courseFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -33,14 +41,17 @@ const courseFormSchema = z.object({
   originalPrice: z.number().optional(),
   discount: z.number().optional(),
   thumbnail: z.string().optional(),
-  category: z.string().min(1, "Category is required"),
   instructor: z.string().min(1, "Instructor is required"),
-  duration: z.string().min(1, "Duration is required"),
   status: z.enum(["published", "draft"]),
   details: z.string().optional(),
   accessInfo: z.string().optional(),
   metaTitle: z.string().optional(),
   metaDescription: z.string().optional(),
+  pdfPath: z.string().optional(),
+  resources: z.array(resourceSchema).optional(),
+  rating: z.number().min(0).max(5).optional(),
+  ratingCount: z.number().min(0).optional(),
+  publishedDate: z.string().optional(),
 });
 
 type CourseFormValues = z.infer<typeof courseFormSchema>;
@@ -52,16 +63,7 @@ interface CourseFormDialogProps {
   onSuccess?: () => void;
 }
 
-const categories = [
-  "Programming",
-  "Web Development",
-  "Data Science",
-  "Mobile Development",
-  "Design",
-  "Business",
-  "Marketing",
-  "Other",
-];
+
 
 export function CourseFormDialog({
   open,
@@ -70,7 +72,15 @@ export function CourseFormDialog({
   onSuccess,
 }: CourseFormDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isPdfUploading, setIsPdfUploading] = useState(false);
   const [error, setError] = useState("");
+  const { isAdmin, adminUser } = useAdminAuth();
+
+  // Resource link management
+  const [resourceLabel, setResourceLabel] = useState("");
+  const [resourceUrl, setResourceUrl] = useState("");
+  const [resources, setResources] = useState<{ label: string; url: string }[]>([]);
 
   const {
     register,
@@ -89,18 +99,22 @@ export function CourseFormDialog({
       originalPrice: undefined,
       discount: undefined,
       thumbnail: "",
-      category: "",
       instructor: "",
-      duration: "",
       status: "draft",
       details: "",
       accessInfo: "",
       metaTitle: "",
       metaDescription: "",
+      pdfPath: "",
+      resources: [],
+      rating: undefined,
+      ratingCount: undefined,
+      publishedDate: "",
     },
   });
 
   const status = watch("status");
+  const currentPdfPath = watch("pdfPath");
 
   // Populate form when editing
   useEffect(() => {
@@ -113,40 +127,131 @@ export function CourseFormDialog({
         originalPrice: course.originalPrice,
         discount: course.discount,
         thumbnail: course.thumbnail || "",
-        category: course.category,
         instructor: course.instructor,
-        duration: course.duration,
         status: course.status,
         details: course.details || "",
         accessInfo: course.accessInfo || "",
         metaTitle: course.metaTitle || "",
         metaDescription: course.metaDescription || "",
+        pdfPath: course.pdfPath || "",
+        resources: course.resources || [],
+        rating: course.rating,
+        ratingCount: course.ratingCount,
+        publishedDate: course.publishedDate || "",
       });
+      setResources(course.resources || []);
     } else {
       reset();
+      setResources([]);
     }
   }, [course, reset]);
+
+  const addResource = () => {
+    if (!resourceLabel.trim() || !resourceUrl.trim()) return;
+    try {
+      new URL(resourceUrl); // validate URL
+    } catch {
+      return;
+    }
+    const updated = [...resources, { label: resourceLabel.trim(), url: resourceUrl.trim() }];
+    setResources(updated);
+    setValue("resources", updated);
+    setResourceLabel("");
+    setResourceUrl("");
+  };
+
+  const removeResource = (index: number) => {
+    const updated = resources.filter((_, i) => i !== index);
+    setResources(updated);
+    setValue("resources", updated);
+  };
 
   const onSubmit = async (values: CourseFormValues) => {
     setIsSubmitting(true);
     setError("");
 
     try {
-      const { auth } = await import("@/firebase");
-      const idToken = await auth.currentUser?.getIdToken();
-      if (!idToken) throw new Error("Not authenticated as admin");
+      if (!isAdmin || !adminUser) {
+        throw new Error("Not authenticated as admin");
+      }
+
+      const fileInput = document.getElementById('thumbnail-file') as HTMLInputElement;
+      const file = fileInput?.files?.[0];
+      
+      let thumbnailUrl = values.thumbnail;
+
+      if (file) {
+        setIsUploading(true);
+        try {
+          thumbnailUrl = await uploadToSupabase(file, "course-thumbnails");
+          values.thumbnail = thumbnailUrl;
+        } catch (uploadErr) {
+          throw new Error(
+            uploadErr instanceof Error
+              ? `Thumbnail upload failed: ${uploadErr.message}`
+              : "Thumbnail upload failed. Please try again."
+          );
+        } finally {
+          setIsUploading(false);
+        }
+      }
+
+      // Handle PDF upload
+      const pdfInput = document.getElementById('pdf-file') as HTMLInputElement;
+      const pdfFile = pdfInput?.files?.[0];
+
+      if (pdfFile) {
+        setIsPdfUploading(true);
+        try {
+          // Read the file as base64 for server upload
+          const base64 = await fileToBase64(pdfFile);
+          const courseId = course?.id || `new-${Date.now()}`;
+          
+          const result = await uploadCoursePdf({
+            data: {
+              courseId,
+              fileName: pdfFile.name,
+              fileBase64: base64,
+              fileType: pdfFile.type || "application/pdf",
+            },
+          });
+          
+          values.pdfPath = result.pdfPath;
+        } catch (pdfErr) {
+          throw new Error(
+            pdfErr instanceof Error
+              ? `PDF upload failed: ${pdfErr.message}`
+              : "PDF upload failed. Please try again."
+          );
+        } finally {
+          setIsPdfUploading(false);
+        }
+      }
+
+      // Include resources
+      values.resources = resources;
 
       if (course) {
-        await updateCourse({ id: course.id, ...values, idToken });
+        // Filter out undefined values to match Course type
+        const updateData: Partial<Course> = {};
+        Object.entries(values).forEach(([key, value]) => {
+          if (value !== undefined) {
+            (updateData as any)[key] = value;
+          }
+        });
+        await updateCourseClient(course.id, updateData);
       } else {
-        await createCourse({ ...values, idToken });
+        await createCourseClient(values as any);
       }
       
       onSuccess?.();
       onOpenChange(false);
       reset();
+      setResources([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save course");
+      setIsUploading(false);
+      setIsPdfUploading(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -222,6 +327,40 @@ export function CourseFormDialog({
 
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
+              <Label htmlFor="rating">Rating (0-5)</Label>
+              <Input
+                id="rating"
+                type="number"
+                min="0"
+                max="5"
+                step="0.1"
+                placeholder="4.8"
+                {...register("rating", { valueAsNumber: true })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ratingCount">Rating Count</Label>
+              <Input
+                id="ratingCount"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="1200"
+                {...register("ratingCount", { valueAsNumber: true })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="publishedDate">Published Date</Label>
+              <Input
+                id="publishedDate"
+                type="date"
+                {...register("publishedDate")}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
               <Label htmlFor="price">Price (₹) *</Label>
               <Input
                 id="price"
@@ -262,49 +401,126 @@ export function CourseFormDialog({
             </div>
           </div>
 
+
+
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="category">Category *</Label>
-              <Select
-                value={watch("category")}
-                onValueChange={(value) => setValue("category", value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.category && (
-                <p className="text-sm text-destructive">{errors.category.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="duration">Duration *</Label>
+              <Label htmlFor="thumbnail-file">Thumbnail Picture</Label>
               <Input
-                id="duration"
-                placeholder="e.g., 12 weeks, 8 hours"
-                {...register("duration")}
+                id="thumbnail-file"
+                type="file"
+                accept="image/*"
+                className="cursor-pointer"
               />
-              {errors.duration && (
-                <p className="text-sm text-destructive">{errors.duration.message}</p>
-              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="thumbnail">Or Thumbnail URL</Label>
+              <Input
+                id="thumbnail"
+                placeholder="https://example.com/image.jpg"
+                {...register("thumbnail")}
+              />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="thumbnail">Thumbnail URL</Label>
+          {/* Course PDF Upload */}
+          <div className="space-y-2 rounded-lg border border-border p-4">
+            <Label htmlFor="pdf-file" className="flex items-center gap-2 text-base font-semibold">
+              <FileText className="h-4 w-4" />
+              Course PDF
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Upload a PDF file for this course. It will be stored securely and only accessible to enrolled students via signed URLs.
+            </p>
             <Input
-              id="thumbnail"
-              placeholder="https://example.com/image.jpg"
-              {...register("thumbnail")}
+              id="pdf-file"
+              type="file"
+              accept=".pdf,application/pdf"
+              className="cursor-pointer"
             />
+            {currentPdfPath && (
+              <p className="text-xs text-green-600">
+                ✓ Existing PDF: <code className="bg-secondary px-1 py-0.5 rounded text-xs">{currentPdfPath}</code>
+              </p>
+            )}
+            {isPdfUploading && (
+              <p className="text-xs text-brand-foreground flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" /> Uploading PDF...
+              </p>
+            )}
+          </div>
+
+          {/* Course Resources (external links) */}
+          <div className="space-y-3 rounded-lg border border-border p-4">
+            <Label className="flex items-center gap-2 text-base font-semibold">
+              <LinkIcon className="h-4 w-4" />
+              Course Resources
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Add external resource links (YouTube, GitHub, documentation, etc.)
+            </p>
+
+            {/* Existing resources */}
+            {resources.length > 0 && (
+              <div className="space-y-2">
+                {resources.map((res, index) => (
+                  <div key={index} className="flex items-center gap-2 rounded bg-secondary/50 p-2 text-sm">
+                    <span className="font-medium flex-shrink-0">{res.label}:</span>
+                    <a
+                      href={res.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 truncate hover:underline"
+                    >
+                      {res.url}
+                    </a>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 flex-shrink-0"
+                      onClick={() => removeResource(index)}
+                    >
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add new resource */}
+            <div className="flex items-end gap-2">
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="resource-label" className="text-xs">Label</Label>
+                <Input
+                  id="resource-label"
+                  placeholder="e.g., YouTube Tutorial"
+                  value={resourceLabel}
+                  onChange={(e) => setResourceLabel(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="flex-[2] space-y-1">
+                <Label htmlFor="resource-url" className="text-xs">URL</Label>
+                <Input
+                  id="resource-url"
+                  placeholder="https://..."
+                  value={resourceUrl}
+                  onChange={(e) => setResourceUrl(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={addResource}
+                disabled={!resourceLabel.trim() || !resourceUrl.trim()}
+              >
+                <Plus className="h-3 w-3 mr-1" /> Add
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -367,15 +583,34 @@ export function CourseFormDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? (
+            <Button type="submit" disabled={isSubmitting || isUploading || isPdfUploading}>
+              {isSubmitting || isUploading || isPdfUploading ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              {course ? "Update Course" : "Create Course"}
+              {isPdfUploading ? "Uploading PDF..." : isUploading ? "Uploading..." : course ? "Update Course" : "Create Course"}
             </Button>
           </div>
         </form>
       </DialogContent>
     </Dialog>
   );
+}
+
+/** Convert a File to a base64 string (data only, no prefix) */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Remove the data:mime;base64, prefix
+      const base64 = result.split(",")[1];
+      if (base64) {
+        resolve(base64);
+      } else {
+        reject(new Error("Failed to convert file to base64"));
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }

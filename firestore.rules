@@ -2,22 +2,49 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Allow public read access to published courses
+    // Courses collection - allow admin to list and query all courses
     match /courses/{courseId} {
+      // Allow public read access to published courses
       allow read: if resource.data.status == 'published' || resource.data.published == true;
-      allow write: if false; // No public write access
+      // Allow admin user to read all courses (including drafts) for dashboard and management
+      allow read: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
+      // Allow write access for authenticated admin users
+      allow write: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
     }
     
-    // Allow read access to courseAccess for authenticated users
+    // Allow admin to list/query the entire courses collection for dashboard stats
+    match /courses {
+      allow read: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
+    }
+    
+    // Allow read access to courseAccess for authenticated users and admin
     match /courseAccess/{accessId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow write: if false; // No public write access
+      // Allow users to read their own access records
+      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || resource.data.email == request.auth.token.email);
+      // Allow admin user to read all access records for dashboard statistics
+      allow read: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
+      // Allow write access for authenticated users (for migration and access granting)
+      allow write: if request.auth != null;
     }
     
-    // Allow read access to enrollments for authenticated users
+    // Allow admin to list/query the entire courseAccess collection for dashboard stats
+    match /courseAccess {
+      allow read: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
+    }
+    
+    // Allow read access to enrollments for authenticated users and admin
     match /enrollments/{enrollmentId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow write: if false; // No public write access
+      // Allow users to read their own enrollment records
+      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || resource.data.userId == request.auth.token.email);
+      // Allow admin user to read all enrollment records for dashboard statistics
+      allow read: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
+      // Allow write access for authenticated users
+      allow write: if request.auth != null;
+    }
+    
+    // Allow admin to list/query the entire enrollments collection for dashboard stats
+    match /enrollments {
+      allow read: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
     }
     
     // Admin users collection - restricted access

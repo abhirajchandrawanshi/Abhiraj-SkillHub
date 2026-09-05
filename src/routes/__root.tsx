@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportRuntimeError } from "../lib/runtime-error-reporting";
 import { AuthProvider } from "../hooks/auth-provider";
 import { AdminAuthProvider } from "../hooks/use-admin-auth";
+import { ThemeProvider } from "../hooks/use-theme";
 
 function NotFoundComponent() {
   return (
@@ -106,13 +107,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+function ThemeInitScript() {
+  const code = `(function(){try{var s=localStorage.getItem('skillearn-theme');var d=s==='dark'||(s!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d)document.documentElement.classList.add('dark');}catch(e){}})();`;
+  return <script dangerouslySetInnerHTML={{ __html: code }} />;
+}
+
 function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
         <HeadContent />
+        <ThemeInitScript />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         {children}
         <Scripts />
       </body>
@@ -125,11 +132,13 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AdminAuthProvider>
-        <AuthProvider>
-          <Outlet />
-        </AuthProvider>
-      </AdminAuthProvider>
+      <ThemeProvider>
+        <AdminAuthProvider>
+          <AuthProvider>
+            <Outlet />
+          </AuthProvider>
+        </AdminAuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

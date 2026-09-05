@@ -1,22 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
 
-import { 
-  COURSE_ID, 
-  COURSE_PRICE_INR, 
-  COURSE_TITLE,
-  INTERNSHIP_ID,
-  INTERNSHIP_PRICE_INR,
-  INTERNSHIP_TITLE,
-  TESTING_ID,
-  TESTING_PRICE_INR,
-  TESTING_TITLE,
-  OMNIROUTE_PRICE_INR,
-  isLegacyCourseId,
-  getLegacyCoursePrice,
-  getLegacyCourseTitle
-} from "@/lib/course";
-import { getCourse as getCourseFromDb } from "./admin";
+
 
 const RAZORPAY_API = "https://api.razorpay.com/v1";
 
@@ -24,6 +11,8 @@ const customerSchema = z.object({
   courseId: z.string().min(1),
   name: z.string().trim().min(2).max(100),
   email: z.string().trim().email().max(255),
+  amount: z.number().optional(), // Allow passing amount for dynamic courses
+  title: z.string().optional(), // Allow passing title for dynamic courses
 });
 
 const paymentSchema = z.object({
@@ -76,6 +65,75 @@ function basicAuthHeader(keyId: string, keySecret: string) {
   return `Basic ${encoded}`;
 }
 
+// Initialize Firebase Admin SDK for server-side operations
+function getAdminFirestore() {
+  console.log("getAdminFirestore called, existing apps:", getApps().length);
+  
+  if (getApps().length > 0) {
+    console.log("Returning existing Firestore instance");
+    return getFirestore();
+  }
+
+  console.log("Initializing Firebase Admin SDK");
+  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  
+  console.log("Environment check:", {
+    hasPrivateKey: !!privateKey,
+    hasProjectId: !!process.env.FIREBASE_ADMIN_PROJECT_ID,
+    hasClientEmail: !!process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+    projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+  });
+  
+  if (!privateKey || !process.env.FIREBASE_ADMIN_PROJECT_ID || !process.env.FIREBASE_ADMIN_CLIENT_EMAIL) {
+    console.error("Firebase Admin credentials not configured");
+    throw new Error("Firebase Admin credentials not configured");
+  }
+
+  try {
+    const app = initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+        privateKey: privateKey,
+        clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+      }),
+    });
+
+    console.log("Firebase Admin SDK initialized successfully");
+    return getFirestore(app);
+  } catch (error) {
+    console.error("Failed to initialize Firebase Admin SDK:", error);
+    throw error;
+  }
+}
+
+// Server-side course fetch using Admin SDK
+async function getCourseByIdServer(courseId: string) {
+  try {
+    console.log("Fetching course from Firestore (server):", courseId);
+    const db = getAdminFirestore();
+    const docRef = db.collection("courses").doc(courseId);
+    const snap = await docRef.get();
+
+    console.log("Course exists:", snap.exists);
+    
+    if (!snap.exists) {
+      console.error("Course not found in Firestore:", courseId);
+      return null;
+    }
+
+    const courseData = {
+      id: snap.id,
+      ...snap.data(),
+    };
+    console.log("Course data retrieved:", { id: courseData.id, title: courseData.title, price: courseData.price });
+    return courseData as any;
+  } catch (error) {
+    console.error("Error fetching course from Firestore (server):", error);
+    throw error;
+  }
+}
+
 async function razorpayFetch(path: string, init: RequestInit) {
   const { keyId, keySecret } = getRazorpayCredentials();
   const response = await fetch(`${RAZORPAY_API}${path}`, {
@@ -122,24 +180,28 @@ export const createRazorpayOrder = createServerFn({ method: "POST" })
       let amountPaise: number;
       let courseTitle: string;
       
-      // Check if it's a legacy course or dynamic course
-      if (isLegacyCourseId(data.courseId)) {
-        // Use legacy pricing
-        amountPaise = getLegacyCoursePrice(data.courseId) * 100;
-        courseTitle = getLegacyCourseTitle(data.courseId);
-      } else {
-        // Fetch from Firestore
-        try {
-          const courseResult = await getCourseFromDb({ data: { id: data.courseId } });
-          if (!courseResult.success || !courseResult.course) {
-            throw new Error("Course not found");
-          }
-          amountPaise = courseResult.course.price * 100;
-          courseTitle = courseResult.course.title;
-        } catch (error) {
-          console.error("Error fetching course from database:", error);
-          throw new Error("Invalid course ID");
+      // Fetch from Firestore using Admin SDK (server-side)
+      try {
+        console.log("Attempting to fetch dynamic course from Firestore:", data.courseId);
+        const course = await getCourseByIdServer(data.courseId);
+        console.log("Course fetch result:", course);
+        
+        if (!course) {
+          console.error("Course not found in Firestore for ID:", data.courseId);
+          throw new Error(`Course not found: ${data.courseId}`);
         }
+        
+        if (!course.price || !course.title) {
+          console.error("Course missing required fields:", course);
+          throw new Error("Course data incomplete (missing price or title)");
+        }
+        
+        amountPaise = course.price * 100;
+        courseTitle = course.title;
+        console.log("Successfully retrieved course data:", { title: courseTitle, amount: amountPaise });
+      } catch (error) {
+        console.error("Error fetching course from database:", error);
+        throw new Error(`Invalid course ID: ${data.courseId}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
 
       console.log("Order details:", { amountPaise, courseTitle, currency: "INR" });
@@ -233,11 +295,8 @@ export const verifyRazorpayPayment = createServerFn({ method: "POST" })
       throw new Error(`Payment currency mismatch. Expected: INR, Got: ${payment.currency}`);
     }
 
-    // Validate amount matches either course, internship, testing, or omniroute price
-    const validAmounts = [COURSE_PRICE_INR * 100, INTERNSHIP_PRICE_INR * 100, TESTING_PRICE_INR * 100, OMNIROUTE_PRICE_INR * 100];
-    if (!validAmounts.includes(payment.amount)) {
-      throw new Error(`Payment amount mismatch. Expected: ₹${COURSE_PRICE_INR}, ₹${INTERNSHIP_PRICE_INR}, ₹${TESTING_PRICE_INR}, or ₹${OMNIROUTE_PRICE_INR}, Got: ₹${payment.amount / 100}`);
-    }
+    // Validate amount - for dynamic courses, we don't validate against hardcoded amounts
+    // since they can have any price set in Firestore
 
     if (!(payment.captured === true || payment.status === "authorized")) {
       throw new Error(`Payment is not successful yet (status: ${payment.status}, captured: ${payment.captured}). Please wait a few moments and try again.`);

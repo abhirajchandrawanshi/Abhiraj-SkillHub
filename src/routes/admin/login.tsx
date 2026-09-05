@@ -37,10 +37,12 @@ function AdminLoginPage() {
       // Map Firebase error codes to friendly messages
       const errorMsg =
         err instanceof Error ? err.message : "Login failed";
-      if (errorMsg.includes("auth/invalid-credential")) {
+      if (errorMsg.includes("auth/invalid-credential") || errorMsg.includes("auth/invalid-email")) {
         setError("Invalid email or password");
       } else if (errorMsg.includes("auth/too-many-requests")) {
         setError("Too many attempts. Please try again later.");
+      } else if (errorMsg.includes("Access denied")) {
+        setError("Access denied. Admin account required.");
       } else {
         setError(errorMsg);
       }

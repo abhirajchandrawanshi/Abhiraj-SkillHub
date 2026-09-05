@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { auth } from "@/firebase";
+import { getAuthInstance } from "@/firebase";
 import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/login")({
@@ -51,6 +51,8 @@ function LoginPage() {
 
   const startPhone = () =>
     run(async () => {
+      const auth = getAuthInstance();
+      if (!auth) throw new Error("Firebase auth not initialized");
       recaptcha.current ??= new RecaptchaVerifier(auth, "recaptcha-container", {
         size: "invisible",
       });
@@ -71,7 +73,7 @@ function LoginPage() {
     );
 
   return (
-    <main className="min-h-screen bg-[#faf9ff] px-5 py-10 sm:py-16">
+    <main className="min-h-screen bg-background px-5 py-10 sm:py-16">
       <div className="mx-auto max-w-md">
         <Link
           to="/"
@@ -79,7 +81,7 @@ function LoginPage() {
         >
           <ArrowLeft className="h-4 w-4" /> Back to courses
         </Link>
-        <section className="mt-8 rounded-xl border border-border bg-white p-6 shadow-lift sm:p-8">
+        <section className="mt-8 rounded-xl border border-border bg-card p-6 shadow-lift sm:p-8">
           <div className="mb-7">
             <p className="text-sm font-semibold text-brand-foreground">Abhiraj Courses</p>
             <h1 className="mt-2 font-display text-3xl font-bold">

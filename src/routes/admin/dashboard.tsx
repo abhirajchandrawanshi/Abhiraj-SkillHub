@@ -11,10 +11,10 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getDashboardStats } from "@/lib/admin";
+import { getDashboardStatsClient } from "@/lib/admin";
 import { AdminShell } from "@/components/AdminShell";
-import { auth } from "@/firebase";
 import { Link } from "@tanstack/react-router";
+import { useAdminAuth } from "@/hooks/use-admin-auth";
 
 export const Route = createFileRoute("/admin/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard | Admin" }] }),
@@ -22,6 +22,8 @@ export const Route = createFileRoute("/admin/dashboard")({
 });
 
 function AdminDashboard() {
+  const { isAdmin, adminUser } = useAdminAuth();
+  
   const {
     data: statsData,
     isLoading,
@@ -29,10 +31,12 @@ function AdminDashboard() {
   } = useQuery({
     queryKey: ["admin-dashboard-stats"],
     queryFn: async () => {
-      const idToken = await auth.currentUser?.getIdToken();
-      if (!idToken) throw new Error("Not authenticated");
-      return getDashboardStats({ idToken });
+      if (!isAdmin || !adminUser) throw new Error("Not authenticated as admin");
+      if (typeof window === 'undefined') throw new Error("Cannot fetch on server");
+      
+      return getDashboardStatsClient();
     },
+    enabled: isAdmin && !!adminUser && typeof window !== 'undefined',
   });
 
   const stats = statsData?.stats || {
