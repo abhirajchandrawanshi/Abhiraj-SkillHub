@@ -12,9 +12,9 @@ import {
 } from "firebase/auth";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { getAuthInstance, initializationError, initializeFirebase } from "@/firebase";
-import { AuthContext, type AuthContextValue } from "@/hooks/use-auth";
-import { migrateGuestPurchasesToAccount } from "@/lib/access";
+import { getAuthInstance, initializationError, initializeFirebase } from "@/services/database/firebase";
+import { AuthContext, type AuthContextValue } from "@/features/auth/use-auth";
+import { migrateGuestPurchasesToAccount } from "@/services/access/access";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthContextValue["user"]>(null);

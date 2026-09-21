@@ -1,4 +1,4 @@
-import { getDb } from "@/firebase";
+import { getDb } from "@/services/database/firebase";
 import {
   collection,
   query,

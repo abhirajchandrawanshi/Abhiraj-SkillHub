@@ -6,8 +6,8 @@ import {
   restoreAccessFromFirestore,
   isAccessExpired,
   type CourseAccess 
-} from "@/lib/access";
-import { useAuth } from "@/hooks/use-auth";
+} from "@/services/access/access";
+import { useAuth } from "@/features/auth/use-auth";
 
 export function useCourseAccess(courseId: string) {
   const [access, setAccess] = useState<CourseAccess | null>(null);

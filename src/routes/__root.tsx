@@ -11,8 +11,8 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportRuntimeError } from "../lib/runtime-error-reporting";
-import { AuthProvider } from "../hooks/auth-provider";
-import { AdminAuthProvider } from "../hooks/use-admin-auth";
+import { AuthProvider } from "../features/auth/auth-provider";
+import { AdminAuthProvider } from "../features/auth/use-admin-auth";
 import { ThemeProvider } from "../hooks/use-theme";
 
 function NotFoundComponent() {

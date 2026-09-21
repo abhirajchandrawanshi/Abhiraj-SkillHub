@@ -1,9 +1,9 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, BookOpen, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, BookOpen, LogOut, Menu, X, Tag } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { useAdminAuth } from "@/hooks/use-admin-auth";
+import { useAdminAuth } from "@/features/auth/use-admin-auth";
 
 interface AdminShellProps {
   children: ReactNode;
@@ -41,6 +41,7 @@ export function AdminShell({ children }: AdminShellProps) {
   const navigation = [
     { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
     { name: "Courses", href: "/admin/courses", icon: BookOpen },
+    { name: "Offers", href: "/admin/offers", icon: Tag },
   ];
 
   return (

@@ -1,4 +1,4 @@
-import { getDb, initializeFirebase } from "@/firebase";
+import { getDb, initializeFirebase } from "@/services/database/firebase";
 import {
   collection,
   doc,
@@ -316,7 +316,7 @@ export async function getPublishedCourseClient(id: string): Promise<{ success: b
 
     return {
       success: true,
-      course: { id: snapshot.id, ...courseData } as Course,
+      course: { ...courseData, id: snapshot.id } as Course,
     };
   } catch (error) {
     console.error("Error fetching course:", error);

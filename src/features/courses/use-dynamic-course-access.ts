@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { getAuthInstance, initializeFirebase } from "@/firebase";
-import { checkFirestoreAccess, readCourseAccess } from "@/lib/access";
+import { getAuthInstance, initializeFirebase } from "@/services/database/firebase";
+import { checkFirestoreAccess, readCourseAccess } from "@/services/access/access";
 
 export function useDynamicCourseAccess(courseId: string) {
   const [access, setAccess] = useState<boolean>(false);

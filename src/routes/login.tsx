@@ -6,8 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getAuthInstance } from "@/firebase";
-import { useAuth } from "@/hooks/use-auth";
+import { getAuthInstance } from "@/services/database/firebase";
+import { useAuth } from "@/features/auth/use-auth";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Login | Abhiraj Courses" }] }),

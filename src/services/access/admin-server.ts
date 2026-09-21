@@ -4,7 +4,7 @@
  * This file should only be imported in server-side code
  */
 
-import { initializeFirebaseAdmin, getAdminDb } from "./firebase-admin";
+import { initializeFirebaseAdmin } from "../database/firebase-admin";
 
 export interface Course {
   id: string;

@@ -8,17 +8,22 @@ import { getFirestore } from "firebase-admin/firestore";
 const RAZORPAY_API = "https://api.razorpay.com/v1";
 
 const customerSchema = z.object({
-  courseId: z.string().min(1),
+  courseId: z.string().optional(),
+  courseIds: z.array(z.string()).optional(),
+  bundlePrice: z.number().optional(), // Override price for bundle offers
+  bundleOfferId: z.string().optional(),
   name: z.string().trim().min(2).max(100),
   email: z.string().trim().email().max(255),
-  amount: z.number().optional(), // Allow passing amount for dynamic courses
-  title: z.string().optional(), // Allow passing title for dynamic courses
+  amount: z.number().optional(),
+  title: z.string().optional(),
 });
 
 const paymentSchema = z.object({
   orderId: z.string().min(1),
   paymentId: z.string().min(1),
   signature: z.string().min(1),
+  userId: z.string().optional(),
+  isGuest: z.boolean().optional(),
 });
 
 type RazorpayOrder = {
@@ -127,9 +132,9 @@ async function getCourseByIdServer(courseId: string) {
     const courseData = {
       id: snap.id,
       ...snap.data(),
-    };
+    } as any;
     console.log("Course data retrieved:", { id: courseData.id, title: courseData.title, price: courseData.price });
-    return courseData as any;
+    return courseData;
   } catch (error) {
     console.error("Error fetching course from Firestore (server):", error);
     throw error;
@@ -175,50 +180,74 @@ export const createRazorpayOrder = createServerFn({ method: "POST" })
   .validator(customerSchema)
   .handler(async ({ data }) => {
     try {
-      console.log("Creating Razorpay order for:", { courseId: data.courseId, name: data.name, email: data.email });
+      // Resolve course IDs — support both single courseId and courseIds[]
+      const courseIds: string[] = data.courseIds?.length
+        ? data.courseIds
+        : data.courseId
+          ? [data.courseId]
+          : [];
+
+      if (courseIds.length === 0) {
+        throw new Error("No course ID(s) provided");
+      }
+
+      console.log("Creating Razorpay order for:", { courseIds, name: data.name, email: data.email });
       
       const { keyId } = getRazorpayCredentials();
       
-      let amountPaise: number;
-      let courseTitle: string;
+      let amountPaise: number = 0;
+      let courseTitle: string = "";
       
-      // Fetch from Firestore using Admin SDK (server-side)
-      try {
-        console.log("Attempting to fetch dynamic course from Firestore:", data.courseId);
-        const course = await getCourseByIdServer(data.courseId);
-        console.log("Course fetch result:", course);
-        
-        if (!course) {
-          console.error("Course not found in Firestore for ID:", data.courseId);
-          throw new Error(`Course not found: ${data.courseId}`);
+      if (data.bundlePrice && data.bundlePrice > 0) {
+        // Bundle offer price override
+        amountPaise = data.bundlePrice * 100;
+        courseTitle = courseIds.length > 1 ? `Bundle (${courseIds.length} courses)` : (courseIds[0] || "Course");
+        console.log("Using bundle price:", amountPaise);
+      } else {
+        // Fetch all courses and sum prices
+        try {
+          const courseResults = await Promise.all(
+            courseIds.map((id) => getCourseByIdServer(id))
+          );
+          
+          const courses = courseResults.filter(Boolean);
+          if (courses.length === 0) {
+            throw new Error(`No courses found for IDs: ${courseIds.join(", ")}`);
+          }
+          
+          for (const course of courses) {
+            if (!course.price || !course.title) {
+              throw new Error(`Course data incomplete for: ${course.id}`);
+            }
+          }
+
+          const totalPrice = courses.reduce((sum: number, c: any) => sum + c.price, 0);
+          amountPaise = totalPrice * 100;
+          courseTitle = courses.length === 1
+            ? courses[0].title
+            : `${courses.map((c: any) => c.title).join(" + ")}`;
+          console.log("Summed course prices:", { totalPrice, courseTitle });
+        } catch (error) {
+          console.error("Error fetching courses:", error);
+          throw new Error(`Invalid course ID(s). Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-        
-        if (!course.price || !course.title) {
-          console.error("Course missing required fields:", course);
-          throw new Error("Course data incomplete (missing price or title)");
-        }
-        
-        amountPaise = course.price * 100;
-        courseTitle = course.title;
-        console.log("Successfully retrieved course data:", { title: courseTitle, amount: amountPaise });
-      } catch (error) {
-        console.error("Error fetching course from database:", error);
-        throw new Error(`Invalid course ID: ${data.courseId}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
 
       console.log("Order details:", { amountPaise, courseTitle, currency: "INR" });
 
+      const primaryCourseId = courseIds[0];
       const order = (await razorpayFetch("/orders", {
         method: "POST",
         body: JSON.stringify({
           amount: amountPaise,
           currency: "INR",
-          receipt: `${data.courseId}_${Date.now()}`.slice(0, 40),
+          receipt: `${primaryCourseId}_${Date.now()}`.slice(0, 40),
           notes: {
-            courseId: data.courseId,
+            courseIds: courseIds.join(","),
             courseTitle: courseTitle,
             customerName: data.name,
             customerEmail: data.email,
+            bundleOfferId: data.bundleOfferId || "",
           },
         }),
       })) as RazorpayOrder;
@@ -323,11 +352,60 @@ export const verifyRazorpayPayment = createServerFn({ method: "POST" })
       throw new Error("Order amount does not match payment amount.");
     }
 
-    console.log("Payment verified successfully");
+    console.log("Payment verified successfully, proceeding to grant access on server");
+
+    // Server-side Access Granting
+    const notes = (order as any).notes || {};
+    const courseIds = notes.courseIds ? notes.courseIds.split(",") : [];
+    const customerEmail = notes.customerEmail || payment.email || "";
+    const userId = data.userId || customerEmail;
+    const isGuest = data.isGuest || false;
+    
+    if (courseIds.length > 0) {
+      try {
+        const db = getAdminFirestore();
+        const expiresAt = isGuest ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null;
+        const grantedAt = new Date().toISOString();
+        
+        for (const cId of courseIds) {
+          const accessRef = db.collection("courseAccess");
+          const snapshot = await accessRef
+            .where("userId", "==", userId)
+            .where("courseId", "==", cId)
+            .get();
+            
+          const accessData: any = {
+            userId,
+            email: customerEmail,
+            paymentId: data.paymentId,
+            orderId: data.orderId,
+            courseId: cId,
+            grantedAt,
+          };
+          if (expiresAt) {
+            accessData.expiresAt = expiresAt;
+          }
+
+          if (!snapshot.empty) {
+            const docId = snapshot.docs[0].id;
+            await accessRef.doc(docId).set(accessData, { merge: true });
+            console.log(`Updated access for ${userId} to course ${cId}`);
+          } else {
+            await accessRef.add(accessData);
+            console.log(`Created new access for ${userId} to course ${cId}`);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to grant access on server:", err);
+        // We still return true so client knows payment succeeded, but log error
+      }
+    }
+
     return {
       verified: true as const,
       orderId: data.orderId,
       paymentId: data.paymentId,
       email: payment.email || null,
+      courseIds,
     };
   });

@@ -36,13 +36,12 @@ function applyThemeClass(theme: Theme) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("light");
+  const [theme, setThemeState] = useState<Theme>("dark");
 
   useEffect(() => {
     const stored = readStoredTheme();
-    const next: Theme =
-      stored ??
-      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    // Default to dark if no stored preference — new visitors always get night mode
+    const next: Theme = stored ?? "dark";
     setThemeState(next);
     applyThemeClass(next);
   }, []);

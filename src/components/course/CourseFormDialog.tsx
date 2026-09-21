@@ -3,8 +3,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2, Upload, Plus, Trash2, FileText, Link as LinkIcon } from "lucide-react";
-import { uploadToSupabase } from "@/lib/supabase-storage";
-import { uploadCoursePdf } from "@/lib/supabase-server";
+import { uploadToSupabase } from "@/services/storage/supabase-storage";
+import { uploadCoursePdf } from "@/services/storage/supabase-server";
 
 import {
   Dialog,
@@ -25,8 +25,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { createCourseClient, updateCourseClient, type Course } from "@/lib/admin";
-import { useAdminAuth } from "@/hooks/use-admin-auth";
+import { createCourseClient, updateCourseClient, type Course } from "@/services/database/admin";
+import { useAdminAuth } from "@/features/auth/use-admin-auth";
 
 const resourceSchema = z.object({
   label: z.string().min(1, "Label is required"),
@@ -41,7 +41,7 @@ const courseFormSchema = z.object({
   originalPrice: z.number().optional(),
   discount: z.number().optional(),
   thumbnail: z.string().optional(),
-  instructor: z.string().min(1, "Instructor is required"),
+  instructor: z.string().optional(),
   status: z.enum(["published", "draft"]),
   details: z.string().optional(),
   accessInfo: z.string().optional(),
@@ -274,31 +274,18 @@ export function CourseFormDialog({
             </div>
           )}
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="title">Course Title *</Label>
-              <Input
-                id="title"
-                placeholder="e.g., Complete Python Masterclass"
-                {...register("title")}
-              />
-              {errors.title && (
-                <p className="text-sm text-destructive">{errors.title.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="instructor">Instructor *</Label>
-              <Input
-                id="instructor"
-                placeholder="e.g., John Doe"
-                {...register("instructor")}
-              />
-              {errors.instructor && (
-                <p className="text-sm text-destructive">{errors.instructor.message}</p>
-              )}
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="title">Course Title *</Label>
+            <Input
+              id="title"
+              placeholder="e.g., Complete Python Masterclass"
+              {...register("title")}
+            />
+            {errors.title && (
+              <p className="text-sm text-destructive">{errors.title.message}</p>
+            )}
           </div>
+
 
           <div className="space-y-2">
             <Label htmlFor="subtitle">Subtitle *</Label>

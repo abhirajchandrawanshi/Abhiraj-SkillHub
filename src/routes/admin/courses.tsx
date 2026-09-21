@@ -47,10 +47,10 @@ import {
   deleteCourseClient,
   toggleCourseStatusClient,
   type Course,
-} from "@/lib/admin";
-import { CourseFormDialog } from "@/components/CourseFormDialog";
-import { AdminShell } from "@/components/AdminShell";
-import { useAdminAuth } from "@/hooks/use-admin-auth";
+} from "@/services/database/admin";
+import { CourseFormDialog } from "@/components/course/CourseFormDialog";
+import { AdminShell } from "@/components/layout/AdminShell";
+import { useAdminAuth } from "@/features/auth/use-admin-auth";
 
 export const Route = createFileRoute("/admin/courses")({
   head: () => ({ meta: [{ title: "Courses | Admin" }] }),
@@ -123,7 +123,7 @@ function AdminCourses() {
   const filteredCourses = courses.filter((course) => {
     const matchesSearch =
       course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      course.instructor.toLowerCase().includes(searchQuery.toLowerCase());
+      course.instructor?.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus =
       statusFilter === "all" || course.status === statusFilter;

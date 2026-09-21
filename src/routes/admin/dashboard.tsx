@@ -11,10 +11,10 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getDashboardStatsClient } from "@/lib/admin";
-import { AdminShell } from "@/components/AdminShell";
+import { getDashboardStatsClient } from "@/services/database/admin";
+import { AdminShell } from "@/components/layout/AdminShell";
 import { Link } from "@tanstack/react-router";
-import { useAdminAuth } from "@/hooks/use-admin-auth";
+import { useAdminAuth } from "@/features/auth/use-admin-auth";
 
 export const Route = createFileRoute("/admin/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard | Admin" }] }),

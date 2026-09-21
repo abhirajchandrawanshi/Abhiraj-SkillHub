@@ -1,15 +1,16 @@
-import { useState, useEffect } from "react";
-import { Loader2, Lock, ShieldCheck, CheckCircle2, Mail } from "lucide-react";
-import { createSignedPdfUrl } from "@/lib/supabase-server";
+import { useState } from "react";
+import { Loader2, Lock, ShieldCheck, CheckCircle2, Mail, ShoppingCart } from "lucide-react";
+import { createSignedPdfUrl } from "@/services/storage/supabase-server";
 
+import { loadRazorpayCheckout } from "@/services/payments/load-razorpay";
+import { createRazorpayOrder, verifyRazorpayPayment } from "@/services/payments/razorpay";
+import { sendResourceEmail } from "@/services/email/brevo";
+import type { CourseAccess } from "@/services/access/access";
+import { grantCourseAccess } from "@/services/access/access";
+import type { Course } from "@/services/database/firebase-courses";
+import type { BundleOffer } from "@/lib/bundle-offers";
 
-import { loadRazorpayCheckout } from "@/lib/load-razorpay";
-import { createRazorpayOrder, verifyRazorpayPayment } from "@/lib/razorpay";
-import { sendResourceEmail } from "@/lib/brevo";
-import type { CourseAccess } from "@/lib/access";
-import { grantFirestoreAccess, grantCourseAccess } from "@/lib/access";
-
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/features/auth/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,21 +28,31 @@ import { Separator } from "@/components/ui/separator";
 export function CheckoutDialog({
   open,
   onOpenChange,
+  // Single course mode (legacy / Buy Now)
   price,
   title,
-  onPaymentSuccess,
   courseId,
   accessInfo,
   pdfPath,
+  // Multi-course / cart mode
+  courses,
+  matchedOffer,
+  onPaymentSuccess,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  price: number;
-  title: string;
+  // Single course props
+  price?: number | undefined;
+  title?: string | undefined;
+  courseId?: string | undefined;
+  accessInfo?: string | undefined;
+  pdfPath?: string | undefined;
+  resources?: { label: string; url: string }[] | undefined;
+  // Multi course props
+  courses?: Course[] | undefined;
+  matchedOffer?: BundleOffer | null | undefined;
   onPaymentSuccess: (access: CourseAccess) => void;
-  courseId: string;
-  accessInfo?: string;
-  pdfPath?: string;
+
 }) {
   const { user } = useAuth();
   const [paymentError, setPaymentError] = useState("");
@@ -50,6 +61,30 @@ export function CheckoutDialog({
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "processing" | "done">("idle");
 
+  // Determine if we are in multi-course (cart) mode
+  const isCartMode = !!courses && courses.length > 0;
+  const allCourseIds = isCartMode
+    ? courses.map((c) => c.id)
+    : courseId
+      ? [courseId]
+      : [];
+  
+  const displayTitle = isCartMode
+    ? courses!.length === 1
+      ? (courses![0]?.title ?? "")
+      : `${courses!.length} Courses Bundle`
+    : (title ?? "");
+
+  const displayPrice = isCartMode
+    ? (matchedOffer ? matchedOffer.bundlePrice : courses!.reduce((s, c) => s + c.price, 0))
+    : (price ?? 0);
+
+  const originalTotal = isCartMode
+    ? courses!.reduce((s, c) => s + c.price, 0)
+    : displayPrice;
+
+  const savings = originalTotal - displayPrice;
+
   const isValidEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
@@ -57,7 +92,6 @@ export function CheckoutDialog({
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     
-    // Validate email - it's now required
     if (!email) {
       setEmailError("Please enter your email address to receive the resources");
       return;
@@ -66,8 +100,11 @@ export function CheckoutDialog({
       setEmailError("Please enter a valid email address");
       return;
     }
+    if (allCourseIds.length === 0) {
+      setPaymentError("No courses selected.");
+      return;
+    }
     setEmailError("");
-    
     setPaymentError("");
     setStatus("processing");
 
@@ -75,11 +112,13 @@ export function CheckoutDialog({
       const userName = email.split('@')[0] || "Guest";
       const userEmail = email;
 
-      console.log("Creating Razorpay order with:", { courseId, actualTitle: title, actualPrice: price });
+      console.log("Creating Razorpay order with:", { courseIds: allCourseIds, displayTitle, displayPrice });
       
       const order = await createRazorpayOrder({
         data: {
-          courseId: courseId,
+          courseIds: allCourseIds,
+          bundlePrice: matchedOffer ? matchedOffer.bundlePrice : undefined,
+          bundleOfferId: matchedOffer?.id,
           name: userName,
           email: userEmail,
         },
@@ -95,7 +134,7 @@ export function CheckoutDialog({
         amount: order.amount,
         currency: order.currency,
         name: userName,
-        description: title,
+        description: displayTitle,
         order_id: order.orderId,
         modal: {
           ondismiss: function() {
@@ -103,63 +142,61 @@ export function CheckoutDialog({
             setStatus("idle");
           },
         },
-        theme: { color: courseId === "testing" ? "#dc2626" : "#e85d04" },
+        theme: { color: "#e85d04" },
         handler: async (response) => {
           try {
             console.log("Razorpay success handler called:", {
               orderId: response.razorpay_order_id,
               paymentId: response.razorpay_payment_id,
-              signature: response.razorpay_signature?.substring(0, 20) + "...",
             });
+            const finalEmail = userEmail;
+            const finalUserName = userName;
+            const userId = user?.uid || finalEmail;
+            const isGuest = !user?.uid;
             
-            console.log("Calling verifyRazorpayPayment...");
             const verified = await verifyRazorpayPayment({
               data: {
                 orderId: response.razorpay_order_id,
                 paymentId: response.razorpay_payment_id,
                 signature: response.razorpay_signature,
+                userId,
+                isGuest,
               },
             });
             console.log("Payment verification succeeded:", verified);
-            
-            // Use the email from the form (user-provided) since Razorpay doesn't reliably return it
-            const finalEmail = userEmail;
-            const finalUserName = userName;
-            
-            // Use Firebase UID if user is authenticated, otherwise use email as userId for guest purchases
-            const userId = user?.uid || finalEmail;
-            const isGuest = !user?.uid; // Guest purchase if no Firebase UID
-            
-            const access = {
-              userId: userId,
+
+            // Grant access for EVERY course purchased
+            const lastAccess: CourseAccess = {
+              userId,
               email: finalEmail,
               paymentId: verified.paymentId,
               orderId: verified.orderId,
               grantedAt: new Date().toISOString(),
-              courseId: courseId,
+              courseId: allCourseIds[allCourseIds.length - 1] ?? "",
             };
-            
-            console.log("Granting access to:", access.email, "for course:", courseId, "isGuest:", isGuest);
-            
-            // Save to Firestore (with guest flag for temporary access)
-            try {
-              await grantFirestoreAccess(access, courseId, isGuest);
-            } catch (firestoreError) {
-              console.error("Firestore access grant failed, using localStorage fallback:", firestoreError);
-              // Fallback to localStorage if Firestore fails
+
+            for (const cId of allCourseIds) {
+              const access: CourseAccess = {
+                userId,
+                email: finalEmail,
+                paymentId: verified.paymentId,
+                orderId: verified.orderId,
+                grantedAt: new Date().toISOString(),
+                courseId: cId,
+              };
               grantCourseAccess(access);
             }
-            
-            // Send resource email via Brevo (if email was provided)
+
+            // Send ONE combined email for ALL purchased courses
             if (finalEmail) {
               try {
                 setEmailStatus("sending");
-                console.log("Sending resource email to:", finalEmail);
+                console.log("Sending resource email for courses:", allCourseIds);
                 const emailResult = await sendResourceEmail({
                   data: {
                     email: finalEmail,
                     name: finalUserName,
-                    courseId: courseId,
+                    courseIds: allCourseIds,
                   },
                 });
                 
@@ -171,19 +208,17 @@ export function CheckoutDialog({
                   setEmailError(emailResult.error || "Unknown error");
                   console.error("Failed to send resource email:", emailResult.error);
                 }
-              } catch (emailError) {
+              } catch (emailErr) {
                 setEmailStatus("failed");
-                setEmailError(emailError instanceof Error ? emailError.message : "Unknown error");
-                console.error("Failed to send resource email:", emailError);
-                // Don't fail the payment flow if email sending fails
+                setEmailError(emailErr instanceof Error ? emailErr.message : "Unknown error");
+                console.error("Failed to send resource email:", emailErr);
               }
             }
             
-            onPaymentSuccess(access);
+            onPaymentSuccess(lastAccess);
             setStatus("done");
           } catch (error) {
             console.error("Payment verification error:", error);
-            console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
             const errorMessage = error instanceof Error ? error.message : "Payment could not be verified. Please contact support before trying again.";
             setPaymentError(errorMessage);
             setStatus("idle");
@@ -205,7 +240,6 @@ export function CheckoutDialog({
       
       console.log("Calling razorpay.open()");
       razorpay.open();
-      console.log("razorpay.open() completed");
     } catch (error) {
       setPaymentError(error instanceof Error ? error.message : "Unable to start payment.");
       setStatus("idle");
@@ -225,27 +259,26 @@ export function CheckoutDialog({
   };
 
   const handleAccessNow = async () => {
-    // If the course has a PDF, generate a signed URL
-    if (pdfPath) {
+    // For single course with PDF, open it
+    if (!isCartMode && pdfPath) {
       try {
         const userId = user?.uid || email;
-        if (!userId) {
-          close(false);
-          return;
+        if (userId) {
+          const result = await createSignedPdfUrl({
+            data: {
+              courseId: courseId!,
+              pdfPath,
+              userId,
+            },
+          });
+          window.open(result.signedUrl, "_blank");
         }
-        const result = await createSignedPdfUrl({
-          data: {
-            courseId,
-            pdfPath,
-            userId,
-          },
-        });
-        window.open(result.signedUrl, "_blank");
       } catch (err) {
         console.error("Failed to get signed PDF URL:", err);
-        // Fall through to close
       }
-    } else if (accessInfo && (accessInfo.startsWith("http") || accessInfo.startsWith("/"))) {
+    } else if (!isCartMode && resources && resources.length > 0 && resources[0].url) {
+      window.open(resources[0].url, "_blank");
+    } else if (!isCartMode && accessInfo && (accessInfo.startsWith("http") || accessInfo.startsWith("/"))) {
       window.open(accessInfo, "_blank");
     }
     close(false);
@@ -259,12 +292,25 @@ export function CheckoutDialog({
             <CheckCircle2 className="mx-auto h-14 w-14 text-success" />
             <DialogTitle className="mt-4 text-2xl">Payment successful</DialogTitle>
             <DialogDescription className="mt-2">
-              Your payment is verified. Your course content is now unlocked.
+              {isCartMode && courses!.length > 1
+                ? `All ${courses!.length} courses are now unlocked.`
+                : "Your course content is now unlocked."}
             </DialogDescription>
+
+            {isCartMode && courses!.length > 1 && (
+              <div className="mt-4 text-left space-y-1.5 rounded-lg bg-secondary/50 p-3 border border-border">
+                <p className="text-xs font-semibold text-muted-foreground mb-2">Courses unlocked:</p>
+                {courses!.map((c) => (
+                  <div key={c.id} className="text-sm flex items-center gap-1.5">
+                    <span className="text-green-500">✓</span> {c.title}
+                  </div>
+                ))}
+              </div>
+            )}
             
             {emailStatus === "success" && (
               <p className="mt-4 text-sm text-green-600 font-medium">
-                ✓ Resource email sent successfully!
+                ✓ Resource{allCourseIds.length > 1 ? "s" : ""} email sent successfully!
               </p>
             )}
             
@@ -280,22 +326,43 @@ export function CheckoutDialog({
             )}
             
             <Button className="mt-6 w-full" size="lg" onClick={handleAccessNow}>
-              Access Now
+              {isCartMode && courses!.length > 1 ? "Go to Courses" : "Access Now"}
             </Button>
           </div>
         ) : (
           <form onSubmit={submit}>
             <DialogHeader>
-              <DialogTitle className="text-2xl">
-                {courseId === "testing" ? "Testing Course Checkout" : "Secure checkout"}
+              <DialogTitle className="text-2xl flex items-center gap-2">
+                {isCartMode && courses!.length > 1 && (
+                  <ShoppingCart className="h-5 w-5 text-primary" />
+                )}
+                Secure checkout
               </DialogTitle>
               <DialogDescription>
-                {courseId === "testing" 
-                  ? "This is a ₹1 test payment to verify the complete payment and access system."
-                  : `${title} — one-time payment, lifetime access.`
-                }
+                {isCartMode && courses!.length > 1
+                  ? `${courses!.length} courses · One-time payment · Lifetime access`
+                  : `${displayTitle} — one-time payment, lifetime access.`}
               </DialogDescription>
             </DialogHeader>
+
+            {/* Course list for multi-course */}
+            {isCartMode && courses!.length > 1 && (
+              <div className="mt-4 space-y-1.5 rounded-lg bg-secondary/40 p-3 border border-border">
+                {courses!.map((c) => (
+                  <div key={c.id} className="flex justify-between text-sm">
+                    <span className="text-foreground">{c.title}</span>
+                    <span className="text-muted-foreground">₹{c.price}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Bundle savings */}
+            {matchedOffer && savings > 0 && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-3 py-2 text-sm">
+                <span className="text-green-600 dark:text-green-400 font-medium">🎉 Bundle deal: saving ₹{savings}!</span>
+              </div>
+            )}
 
             <div className="mt-5 space-y-4">
               <div className="space-y-2">
@@ -326,11 +393,20 @@ export function CheckoutDialog({
 
             <Separator className="my-5" />
 
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Total due today</span>
-              <span className="font-display text-2xl font-bold">
-                ₹{price.toLocaleString("en-IN")}
-              </span>
+            {/* Price summary */}
+            <div className="space-y-1.5">
+              {matchedOffer && savings > 0 && (
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Original total</span>
+                  <span className="line-through">₹{originalTotal.toLocaleString("en-IN")}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Total due today</span>
+                <span className="font-display text-2xl font-bold">
+                  ₹{displayPrice.toLocaleString("en-IN")}
+                </span>
+              </div>
             </div>
 
             <Button
@@ -345,7 +421,7 @@ export function CheckoutDialog({
                 </>
               ) : (
                 <>
-                  <Lock className="h-4 w-4" /> Pay ₹{price.toLocaleString("en-IN")}
+                  <Lock className="h-4 w-4" /> Pay ₹{displayPrice.toLocaleString("en-IN")}
                 </>
               )}
             </Button>

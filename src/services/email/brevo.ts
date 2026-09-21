@@ -131,31 +131,48 @@ async function sendEmail(to: string, subject: string, html: string) {
 
 
 
-function createDynamicCourseEmailTemplate(userEmail: string, userName: string, course: any) {
-  const subject = `🎉 Your ${course.title} - Access Granted!`;
-  const websiteUrl = getWebsiteUrl();
-  
-  // Create a proper resource URL if it's a relative path (like /python-interview-questions.pdf)
+function createCourseSection(course: any, websiteUrl: string) {
   let resourceUrl = course.accessInfo;
   if (resourceUrl && resourceUrl.startsWith('/')) {
     resourceUrl = `${websiteUrl}${resourceUrl}`;
   }
-  
   const isResourceLink = resourceUrl && (resourceUrl.startsWith('http') || resourceUrl.startsWith('/'));
-  
+
+  return `
+    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:20px;margin-bottom:16px;">
+      <h3 style="margin:0 0 8px 0;color:#1f2937;font-size:16px;">📚 ${course.title}</h3>
+      ${course.description ? `<p style="margin:0 0 12px 0;color:#6b7280;font-size:14px;">${course.description}</p>` : ''}
+      ${course.pdfPath 
+        ? `<p style="margin:0 0 8px 0;font-size:14px;">✅ Includes a PDF resource — <a href="${websiteUrl}" style="color:#667eea;">log in to access it</a></p>` 
+        : ''}
+      ${isResourceLink 
+        ? `<a href="${resourceUrl}" style="display:inline-block;padding:10px 20px;background:#667eea;color:white;text-decoration:none;border-radius:5px;font-size:14px;margin-top:8px;">Access Resource →</a>` 
+        : (course.accessInfo ? `<p style="margin:8px 0 0 0;font-size:14px;"><strong>Access Info:</strong> ${course.accessInfo}</p>` : '')}
+    </div>
+  `;
+}
+
+function createMultiCourseEmailTemplate(userEmail: string, userName: string, courses: any[]) {
+  const websiteUrl = getWebsiteUrl();
+  const isSingle = courses.length === 1;
+  const subject = isSingle
+    ? `🎉 Your ${courses[0].title} - Access Granted!`
+    : `🎉 Your ${courses.length} Courses - Access Granted!`;
+
+  const courseSections = courses.map((c) => createCourseSection(c, websiteUrl)).join('');
+
   const html = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>${course.title} Access</title>
+      <title>Course Access</title>
       <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background: #f3f4f6; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
         .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
         .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-        .button { display: inline-block; padding: 15px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
         .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
       </style>
     </head>
@@ -163,35 +180,20 @@ function createDynamicCourseEmailTemplate(userEmail: string, userName: string, c
       <div class="container">
         <div class="header">
           <h1>🎉 Payment Successful!</h1>
-          <p>Your ${course.title} is now unlocked</p>
+          <p>${isSingle ? `Your ${courses[0].title} is now unlocked` : `Your ${courses.length} courses are now unlocked`}</p>
         </div>
         <div class="content">
           <p>Hi ${userName},</p>
-          <p>Thank you for your purchase! Your payment for <strong>${course.title}</strong> has been successfully processed.</p>
+          <p>Thank you for your purchase! ${isSingle ? 'Your course has' : 'All your courses have'} been successfully unlocked.</p>
           
-          <h2>📚 Course Details:</h2>
-          <ul>
-            <li><strong>Course:</strong> ${course.title}</li>
-          </ul>
+          <h2 style="margin-bottom:16px;">Your Purchased Courses:</h2>
+          ${courseSections}
           
-          <p><strong>Description:</strong></p>
-          <p>${course.description}</p>
+          <p style="margin-top:24px;">You can access all your courses by logging into your account:</p>
+          <a href="${websiteUrl}" style="display:inline-block;padding:15px 30px;background:#667eea;color:white;text-decoration:none;border-radius:5px;margin:16px 0;">Go to Website</a>
           
-          ${course.pdfPath 
-            ? `<p>Your course includes a PDF resource. You can access it by logging into your account at:</p><a href="${websiteUrl}" class="button">Access Course Resource</a>` 
-            : ''}
-          ${isResourceLink 
-            ? `<p>You can also access your external resource directly here:</p><a href="${resourceUrl}" class="button">External Resource Link</a>` 
-            : (course.accessInfo ? `<p><strong>Access Information:</strong></p><p>${course.accessInfo}</p>` : '')}
-          
-          <p><strong>Login Details:</strong></p>
-          <p>Email: ${userEmail}</p>
-          
-          <p>You can also access your course by logging into your account at:</p>
-          <a href="${websiteUrl}" class="button">Go to Website</a>
-          
-          <p>If you have any questions or need assistance, feel free to reach out to our support team.</p>
-          
+          <p style="color:#6b7280;font-size:14px;">Email on file: ${userEmail}</p>
+          <p>If you have any questions, feel free to reach out to our support team.</p>
           <p>Happy learning! 🚀</p>
           
           <div class="footer">
@@ -207,31 +209,47 @@ function createDynamicCourseEmailTemplate(userEmail: string, userName: string, c
   return { subject, html };
 }
 
+// Legacy single-course template (kept for backward compat)
+function createDynamicCourseEmailTemplate(userEmail: string, userName: string, course: any) {
+  return createMultiCourseEmailTemplate(userEmail, userName, [course]);
+}
+
 export const sendResourceEmail = createServerFn({ method: "POST" })
   .validator(z.object({
     email: z.string().email(),
     name: z.string(),
-    courseId: z.string(),
+    // Accept either a single courseId (legacy) or an array of courseIds
+    courseId: z.string().optional(),
+    courseIds: z.array(z.string()).optional(),
   }))
   .handler(async ({ data }) => {
-    console.log("Preparing to send resource email via Brevo:", { email: data.email, courseId: data.courseId });
+    const ids: string[] = data.courseIds?.length
+      ? data.courseIds
+      : data.courseId
+        ? [data.courseId]
+        : [];
+
+    console.log("Preparing to send resource email via Brevo:", { email: data.email, courseIds: ids });
     
-    let emailTemplate;
-    
-    // Handle dynamic courses - fetch course data from Firestore using Admin SDK
-    try {
-      console.log("Fetching dynamic course data for email:", data.courseId);
-      const course = await getCourseByIdServer(data.courseId);
-      if (!course) {
-        console.error("Failed to fetch course data for email:", data.courseId);
-        return { success: false, error: "Course not found" };
-      }
-      emailTemplate = createDynamicCourseEmailTemplate(data.email, data.name, course);
-    } catch (error) {
-      console.error("Error fetching dynamic course for email:", error);
-      return { success: false, error: "Failed to fetch course data" };
+    if (ids.length === 0) {
+      return { success: false, error: "No course IDs provided" };
     }
 
-    const result = await sendEmail(data.email, emailTemplate.subject, emailTemplate.html);
-    return result;
+    try {
+      // Fetch all courses in parallel
+      const courseResults = await Promise.all(ids.map((id) => getCourseByIdServer(id)));
+      const courses = courseResults.filter(Boolean);
+
+      if (courses.length === 0) {
+        console.error("No courses found for IDs:", ids);
+        return { success: false, error: "Course(s) not found" };
+      }
+
+      const emailTemplate = createMultiCourseEmailTemplate(data.email, data.name, courses);
+      const result = await sendEmail(data.email, emailTemplate.subject, emailTemplate.html);
+      return result;
+    } catch (error) {
+      console.error("Error sending resource email:", error);
+      return { success: false, error: error instanceof Error ? error.message : "Failed to send email" };
+    }
   });

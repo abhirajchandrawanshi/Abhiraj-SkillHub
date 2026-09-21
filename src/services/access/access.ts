@@ -1,4 +1,4 @@
-import { getDb } from "@/firebase";
+import { getDb } from "@/services/database/firebase";
 import {
   collection,
   query,
@@ -263,6 +263,7 @@ export function onAccessChange(
         orderId: docs.orderId,
         grantedAt: docs.grantedAt,
         expiresAt: docs.expiresAt,
+        courseId: courseId,
       };
       // Also update localStorage when Firestore changes
       grantCourseAccess(accessData);

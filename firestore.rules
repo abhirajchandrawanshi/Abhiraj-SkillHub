@@ -23,8 +23,8 @@ service cloud.firestore {
       allow read: if request.auth != null && (resource.data.userId == request.auth.uid || resource.data.email == request.auth.token.email);
       // Allow admin user to read all access records for dashboard statistics
       allow read: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
-      // Allow write access for authenticated users (for migration and access granting)
-      allow write: if request.auth != null;
+      // Allow write access only for admin users
+      allow write: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
     }
     
     // Allow admin to list/query the entire courseAccess collection for dashboard stats
@@ -38,8 +38,8 @@ service cloud.firestore {
       allow read: if request.auth != null && (resource.data.userId == request.auth.uid || resource.data.userId == request.auth.token.email);
       // Allow admin user to read all enrollment records for dashboard statistics
       allow read: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
-      // Allow write access for authenticated users
-      allow write: if request.auth != null;
+      // Allow write access only for admin users
+      allow write: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
     }
     
     // Allow admin to list/query the entire enrollments collection for dashboard stats
@@ -47,6 +47,14 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
     }
     
+    // Bundle offers collection - public read, admin-only write
+    match /bundleOffers/{offerId} {
+      // Anyone can read bundle offers (needed to display deals in cart)
+      allow read: if true;
+      // Only admin can create/update/delete bundle offers
+      allow write: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
+    }
+
     // Admin users collection - restricted access
     match /adminUsers/{userId} {
       allow read, write: if false; // No direct access, managed via Firebase Console

@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, type User } from "firebase/auth";
-import { getAuthInstance, initializeFirebase } from "@/firebase";
+import { getAuthInstance, initializeFirebase } from "@/services/database/firebase";
 
 export type AdminContextValue = {
   isAdmin: boolean;
