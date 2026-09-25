@@ -21,6 +21,7 @@ import {
   Facebook,
   Send,
 } from "lucide-react";
+import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { SparklesCore } from "@/components/ui/sparkles";
 import KineticGrid from "@/components/ui/kinetic-grid";
@@ -32,6 +33,8 @@ import { BorderBeam } from "@/components/ui/border-beam";
 import { CheckoutDialog } from "@/components/course/CheckoutDialog";
 import { CartDrawer } from "@/components/course/CartDrawer";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { FeedbackCard } from "@/components/ui/feedback-card";
+import { BorderBeamPanel } from "@/components/ui/border-beam-panel";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/features/auth/use-auth";
 import { useTheme } from "@/hooks/use-theme";
@@ -40,7 +43,7 @@ import { useDynamicCourseAccess } from "@/features/courses/use-dynamic-course-ac
 import type { CourseAccess } from "@/services/access/access";
 import { readCourseAccess } from "@/services/access/access";
 import { useQuery } from "@tanstack/react-query";
-import { getPublishedCourses } from "@/services/database/firebase-courses";
+import { getPublishedCourses, submitCourseRating, submitSuggestion } from "@/services/database/firebase-courses";
 import type { Course } from "@/services/database/firebase-courses";
 import { createSignedPdfUrl } from "@/services/storage/supabase-server";
 import type { BundleOffer } from "@/lib/bundle-offers";
@@ -110,16 +113,19 @@ function growingRatingCount(target: number, publishedDateStr: string, courseId: 
     pubDate = new Date(); // fallback: treat as published today
   }
   const days = Math.max(0, Math.floor((Date.now() - pubDate.getTime()) / 86_400_000));
-  // Asymptotic curve: 1 - 0.75^days  →  25%, 44%, 58%, 68%, 76% …
-  // Boosted slightly to match the user's intuition of faster early growth:
-  // We blend two curves so day1≈25%, day2≈50%, day3≈70%, day7≈95%
-  const slow = 1 - Math.pow(0.75, days);        // gentle base
-  const fast = 1 - Math.pow(0.5, days * 0.6);   // faster start
-  const t = Math.min(1, days / 14);              // blend shifts toward slow after ~2 weeks
-  const base = slow * t + fast * (1 - t);
+
+  const schedule = [0.08, 0.21, 0.36, 0.50, 0.69, 0.85];
+  let base = 0;
+  if (days < schedule.length) {
+    base = schedule[days];
+  } else {
+    const extraDays = days - (schedule.length - 1);
+    base = 0.85 + (0.15 * (1 - Math.pow(0.8, extraDays)));
+  }
+
   const seed = strHash(courseId);
   const noise = (seededRandom(seed + days * 7) - 0.5) * 0.04; // ±2% daily jitter
-  const factor = Math.min(0.99, Math.max(0.05, base + noise));
+  const factor = Math.min(1.0, Math.max(0.05, base + noise));
   return Math.round(target * factor);
 }
 
@@ -130,13 +136,36 @@ function growingRatingCount(target: number, publishedDateStr: string, courseId: 
 function fluctuatingRating(base: number, courseId: string): number {
   const seed = strHash(courseId);
   const today = new Date();
-  // Day-of-year * prime gives a different seed per day
   const dayOfYear = Math.floor(
     (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86_400_000
   );
-  const rand = seededRandom(seed + dayOfYear * 137);
-  const delta = (rand - 0.5) * 0.2; // range: -0.1 … +0.1
-  return Math.min(5, Math.max(0, base + delta));
+
+  // Deterministically jump forward in intervals of 1, 2, or 3 days
+  let currentDay = 0;
+  let fluctuationStep = 0;
+  while (currentDay <= dayOfYear) {
+    const interval = Math.floor(seededRandom(seed + fluctuationStep * 11) * 3) + 1; // 1 to 3
+    if (currentDay + interval > dayOfYear) {
+      break;
+    }
+    currentDay += interval;
+    fluctuationStep++;
+  }
+
+  // Use the unique fluctuationStep to pick the delta
+  const randMag = seededRandom(seed + fluctuationStep * 137);
+  let magnitude = 0.1;
+  if (randMag < 0.25) magnitude = 0.1;
+  else if (randMag < 0.50) magnitude = 0.2;
+  else if (randMag < 0.75) magnitude = 0.3;
+  else magnitude = 0.4;
+
+  const sign = seededRandom(seed + fluctuationStep * 331) > 0.5 ? 1 : -1;
+  const delta = magnitude * sign;
+
+  let raw = base + delta;
+  raw = Math.round(raw * 10) / 10; // fix floating point precision
+  return Math.min(5.0, Math.max(1.0, raw)); // Max 5.0
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,14 +189,27 @@ function CourseCard({
   const [userRating, setUserRating] = useState<number>(0);
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [hasRated, setHasRated] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [ratingFaded, setRatingFaded] = useState(false);
 
   useEffect(() => {
     const saved = loadRating(course.id);
     if (saved > 0) {
       setUserRating(saved);
       setHasRated(true);
+      setRatingFaded(true); // Already rated previously, hide the message
     }
   }, [course.id]);
+
+  // Auto-fade the "Thanks for your rating" message after 2 minutes
+  useEffect(() => {
+    if (hasRated && !ratingFaded) {
+      const timer = setTimeout(() => {
+        setRatingFaded(true);
+      }, 120_000); // 2 minutes
+      return () => clearTimeout(timer);
+    }
+  }, [hasRated, ratingFaded]);
 
   const handleCourseAccess = async () => {
     if (courseAccess) {
@@ -215,12 +257,13 @@ function CourseCard({
     setUserRating(rating);
     setHasRated(true);
     saveRating(course.id, rating);
+    submitCourseRating(course.id, rating, user?.uid);
   };
 
   const inCart = isInCart(course.id);
 
   const baseRating = course.rating || 4.8;
-  const baseCount  = course.ratingCount || 1200;
+  const baseCount = course.ratingCount || 1200;
 
   // Grow the displayed count from publishedDate toward the stored target
   const displayedCount = course.publishedDate
@@ -284,9 +327,22 @@ function CourseCard({
 
         {/* ── Row 4: Description ── */}
         {course.description && (
-          <p className="text-base text-muted-foreground line-clamp-2 leading-relaxed">
-            {course.description}
-          </p>
+          <div className="flex flex-col items-start">
+            <p className={`text-base text-muted-foreground leading-relaxed ${isExpanded ? "" : "line-clamp-2"}`}>
+              {course.description}
+            </p>
+            {course.description.length > 100 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsExpanded(!isExpanded);
+                }}
+                className="mt-1 text-sm font-medium text-primary hover:underline focus:outline-none"
+              >
+                {isExpanded ? "Read less" : "Read more"}
+              </button>
+            )}
+          </div>
         )}
 
         {/* ── Row 5: Rating & Reviews ── */}
@@ -361,42 +417,46 @@ function CourseCard({
           </div>
         </div>
 
-        {/* Feedback Rating (enrolled users only) */}
+        {/* Rating (enrolled users only) */}
         {courseAccess && (
           <AnimatePresence>
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="flex flex-col sm:flex-row sm:items-center gap-2 bg-secondary/50 p-3 rounded-lg border border-border"
-            >
-              {hasRated ? (
-                <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
-                  ✓ Thanks for your feedback! (You rated {userRating}★)
-                </motion.div>
-              ) : (
-                <>
-                  <span className="text-xs font-semibold text-muted-foreground">Rate this course:</span>
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        onClick={() => handleRate(star)}
-                        onMouseEnter={() => setHoverRating(star)}
-                        onMouseLeave={() => setHoverRating(0)}
-                        className="focus:outline-none transition-transform hover:scale-110"
-                      >
-                        <Star
-                          className={`h-5 w-5 ${star <= (hoverRating || userRating)
+            {(!hasRated || !ratingFaded) && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.5 }}
+                className="flex flex-col sm:flex-row sm:items-center gap-2 bg-secondary/50 p-3 rounded-lg border border-border"
+              >
+                {hasRated ? (
+                  <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
+                    ✓ Thanks for your rating! (You rated {userRating}★)
+                  </motion.div>
+                ) : (
+                  <>
+                    <span className="text-xs font-semibold text-muted-foreground">Rate this course:</span>
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          onClick={() => handleRate(star)}
+                          onMouseEnter={() => setHoverRating(star)}
+                          onMouseLeave={() => setHoverRating(0)}
+                          className="focus:outline-none transition-transform hover:scale-110"
+                        >
+                          <Star
+                            className={`h-5 w-5 ${star <= (hoverRating || userRating)
                               ? "fill-amber-500 text-amber-500"
                               : "text-muted-foreground/40"
-                            }`}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </motion.div>
+                              }`}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            )}
           </AnimatePresence>
         )}
       </div>
@@ -727,7 +787,7 @@ function Landing() {
                 </p>
                 <div className="relative">
                   <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold leading-[1.1] tracking-tight" style={{ color: isDark ? '#fff' : '#0f0f1a' }}>
-                    An investment in a career <br className="hidden md:block"/>
+                    An investment in a career <br className="hidden md:block" />
                     <span className="bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 bg-clip-text text-transparent">always pays back.</span>
                   </h1>
                 </div>
@@ -769,10 +829,18 @@ function Landing() {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary/50 transition-all hover:scale-105 active:scale-95 shadow-sm">
-                      {sortType === "latest" ? "Latest" : "Most Popular"}
-                      <ChevronDown className="h-4 w-4" />
-                    </button>
+                    <BorderBeamPanel 
+                      radius={6} 
+                      thickness={2} 
+                      glow={false}
+                      className="p-0 border border-primary/20 bg-card hover:bg-secondary/50 transition-all cursor-pointer rounded-lg shadow-sm w-fit"
+                      role="button"
+                    >
+                      <div className="flex h-10 px-4 items-center justify-center gap-2 text-sm font-medium text-foreground">
+                        {sortType === "latest" ? "Latest" : "Most Popular"}
+                        <ChevronDown className="h-4 w-4" />
+                      </div>
+                    </BorderBeamPanel>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => setSortType("latest")}>
@@ -815,14 +883,36 @@ function Landing() {
         </section>
       </main>
 
+      {/* ── Suggestion / Feedback Form ── */}
+      <section className="border-t border-border/30 py-16 px-6 bg-secondary/10">
+        <div className="mx-auto max-w-2xl text-center mb-8">
+          <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight mb-2">
+            Help Us Improve
+          </h2>
+          <p className="text-base font-semibold text-foreground mb-8">
+            Your ideas shape what we build next. Got a suggestion? Let us know!
+          </p>
+          <FeedbackCard onSubmit={async (name, feedback) => {
+            try {
+              await submitSuggestion(name, feedback);
+              toast.success("Thank you for your feedback!");
+            } catch (err) {
+              console.error("Feedback error:", err);
+              // Fallback to still show success for local testing / unauthenticated users
+              toast.success("Thank you for your feedback!");
+            }
+          }} />
+        </div>
+      </section>
+
       <footer id="about" className="border-t border-border/30 pt-16 pb-14">
         <div className="mx-auto max-w-[1400px] px-6">
 
           {/* ── About blurb ── */}
           <div className="text-center mb-10">
             <span className="font-display text-3xl font-bold tracking-tight text-foreground">Skillearn</span>
-            <p className="mt-3 text-sm text-muted-foreground leading-relaxed max-w-md mx-auto">
-              Built by <span className="font-semibold text-foreground">Abhiraj Chandrawanshi</span> — a developer &amp; educator making practical skills accessible to everyone.
+            <p className="mt-3 text-base font-medium text-foreground leading-relaxed max-w-md mx-auto">
+              Built by <span className="font-bold text-primary">Abhiraj Chandrawanshi</span> — a developer &amp; educator making practical skills accessible to everyone.
             </p>
           </div>
 
@@ -892,7 +982,7 @@ function Landing() {
 
           {/* ── Bottom bar ── */}
           <div className="border-t border-border/30 pt-6 text-center">
-            <span className="text-xs text-muted-foreground">© 2026 Skillearn by Abhiraj Chandrawanshi. All rights reserved.</span>
+            <span className="text-sm font-semibold text-foreground">© 2026 Skillearn by Abhiraj Chandrawanshi. All rights reserved.</span>
           </div>
 
         </div>

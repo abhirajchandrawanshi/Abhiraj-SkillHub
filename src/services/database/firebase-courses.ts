@@ -218,3 +218,39 @@ export async function getEnrollment(
     ...snapshot.docs[0].data(),
   };
 }
+
+/**
+ * Submit a real user rating to Firestore
+ */
+export async function submitCourseRating(courseId: string, rating: number, userId?: string) {
+  try {
+    const db = getDbSafe();
+    const ratingsRef = collection(db, "courseRatings");
+    await addDoc(ratingsRef, {
+      courseId,
+      rating,
+      userId: userId || "anonymous",
+      createdAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Error submitting rating:", error);
+  }
+}
+
+/**
+ * Submit a user suggestion/feedback to Firestore
+ */
+export async function submitSuggestion(name: string, feedback: string) {
+  try {
+    const db = getDbSafe();
+    const suggestionsRef = collection(db, "suggestions");
+    await addDoc(suggestionsRef, {
+      name,
+      feedback,
+      createdAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Error submitting suggestion:", error);
+    throw error;
+  }
+}

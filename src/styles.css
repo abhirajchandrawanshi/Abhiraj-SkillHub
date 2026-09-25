@@ -74,25 +74,25 @@
 
 :root {
   --radius: 0.9rem;
-  --background: oklch(0.995 0.003 106);
-  --foreground: oklch(0.21 0.03 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.03 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.03 260);
-  --primary: oklch(0.22 0.06 262);
-  --primary-foreground: oklch(0.985 0.005 106);
-  --secondary: oklch(0.965 0.008 250);
-  --secondary-foreground: oklch(0.24 0.05 262);
-  --muted: oklch(0.965 0.008 250);
-  --muted-foreground: oklch(0.52 0.03 258);
-  --accent: oklch(0.955 0.05 120);
-  --accent-foreground: oklch(0.26 0.06 140);
+  --background: #FFF8F0;
+  --foreground: #2B211C;
+  --card: rgba(255, 255, 255, 0.65);
+  --card-foreground: #2B211C;
+  --popover: #FFF8F0;
+  --popover-foreground: #2B211C;
+  --primary: #C96A3D;
+  --primary-foreground: #FFF8F0;
+  --secondary: #FFD7A8;
+  --secondary-foreground: #2B211C;
+  --muted: rgba(201, 106, 61, 0.1);
+  --muted-foreground: #79665A;
+  --accent: #E8A45C;
+  --accent-foreground: #2B211C;
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.918 0.012 255);
-  --input: oklch(0.918 0.012 255);
-  --ring: oklch(0.82 0.19 128);
+  --border: rgba(201, 106, 61, 0.15);
+  --input: rgba(201, 106, 61, 0.15);
+  --ring: #E8A45C;
 
   --brand: oklch(0.87 0.2 128);
   --brand-foreground: oklch(0.24 0.06 150);
@@ -134,25 +134,25 @@
   --success: oklch(0.65 0.15 152);
   --success-foreground: oklch(0.15 0.02 150);
 
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
+  --background: #1A1412;
+  --foreground: #FFF8F0;
+  --card: rgba(43, 33, 28, 0.65);
+  --card-foreground: #FFF8F0;
+  --popover: #1A1412;
+  --popover-foreground: #FFF8F0;
+  --primary: #C96A3D;
+  --primary-foreground: #FFF8F0;
+  --secondary: rgba(232, 164, 92, 0.15);
+  --secondary-foreground: #FFD7A8;
+  --muted: rgba(201, 106, 61, 0.15);
+  --muted-foreground: #FFD7A8;
+  --accent: #E8A45C;
+  --accent-foreground: #1A1412;
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
+  --border: rgba(201, 106, 61, 0.25);
+  --input: rgba(201, 106, 61, 0.25);
+  --ring: #E8A45C;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -184,7 +184,12 @@
     font-family: var(--font-sans);
     scroll-behavior: smooth;
   }
-  h1, h2, h3, h4, .font-display {
+
+  h1,
+  h2,
+  h3,
+  h4,
+  .font-display {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
   }
@@ -323,14 +328,12 @@
   position: relative;
   appearance: none;
   cursor: pointer;
-  background: radial-gradient(
-    var(--spread-x) var(--spread-y) at var(--pos-x) var(--pos-y),
-    var(--color-1) var(--stop-1),
-    var(--color-2) var(--stop-2),
-    var(--color-3) var(--stop-3),
-    var(--color-4) var(--stop-4),
-    var(--color-5) var(--stop-5)
-  );
+  background: radial-gradient(var(--spread-x) var(--spread-y) at var(--pos-x) var(--pos-y),
+      var(--color-1) var(--stop-1),
+      var(--color-2) var(--stop-2),
+      var(--color-3) var(--stop-3),
+      var(--color-4) var(--stop-4),
+      var(--color-5) var(--stop-5));
   transition:
     --pos-x 0.5s,
     --pos-y 0.5s,
@@ -357,11 +360,9 @@
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(
-    var(--border-angle),
-    var(--border-color-1),
-    var(--border-color-2)
-  );
+  background: linear-gradient(var(--border-angle),
+      var(--border-color-1),
+      var(--border-color-2));
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask-composite: exclude;
   pointer-events: none;

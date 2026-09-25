@@ -37,6 +37,7 @@ function AdminDashboard() {
       return getDashboardStatsClient();
     },
     enabled: isAdmin && !!adminUser && typeof window !== 'undefined',
+    refetchInterval: 3000,
   });
 
   const stats = statsData?.stats || {
@@ -212,6 +213,68 @@ function AdminDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {stats.courseStats && stats.courseStats.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Course Sales Performance</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {stats.courseStats.map((course: any) => (
+                  <div key={course.id} className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border/50 pb-4 last:border-0 last:pb-0 gap-2">
+                    <span className="text-sm font-medium">{course.title}</span>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-6 text-xs sm:text-sm">
+                      <div className="flex items-center gap-2 sm:gap-3 text-muted-foreground bg-secondary/30 px-3 py-1.5 rounded-md">
+                        <span title="5 Star" className="text-amber-500 font-semibold">5★ {course.ratings?.[5] ?? 0}</span>
+                        <span title="4 Star">4★ {course.ratings?.[4] ?? 0}</span>
+                        <span title="3 Star">3★ {course.ratings?.[3] ?? 0}</span>
+                        <span title="2 Star">2★ {course.ratings?.[2] ?? 0}</span>
+                        <span title="1 Star">1★ {course.ratings?.[1] ?? 0}</span>
+                        <span className="border-l border-border/50 pl-2 sm:pl-3 font-semibold text-foreground">
+                          {course.ratings?.total ?? 0} ratings
+                        </span>
+                      </div>
+                      <div className="flex items-center shrink-0">
+                        <span className="font-bold mr-1 text-base text-foreground">{course.purchases}</span>
+                        <span className="text-muted-foreground">purchases</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {stats.suggestions && (
+          <Card>
+            <CardHeader>
+              <CardTitle>User Suggestions & Feedback ({stats.suggestions.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {stats.suggestions.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No suggestions yet. They'll appear here once users submit them.</p>
+              ) : (
+                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+                  {stats.suggestions.map((s: any, i: number) => (
+                    <div key={i} className="flex flex-col gap-1 border-b border-border/50 pb-3 last:border-0 last:pb-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-foreground">{s.name}</span>
+                        {s.createdAt && (
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(s.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{s.feedback}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   })();

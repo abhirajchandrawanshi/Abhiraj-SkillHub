@@ -153,16 +153,7 @@ export async function updateCourseClient(id: string, updateFields: Partial<Cours
 export async function deleteCourseClient(id: string): Promise<{ success: boolean }> {
   try {
     const db = getDbSafe();
-    // First check if course has any purchases
-    const accessRef = collection(db, "courseAccess");
-    const q = query(accessRef, where("courseId", "==", id));
-    const snapshot = await getDocs(q);
 
-    if (!snapshot.empty) {
-      throw new Error(
-        "Cannot delete course with existing purchases. Please unpublish instead.",
-      );
-    }
 
     const courseRef = doc(db, "courses", id);
     await deleteDoc(courseRef);
@@ -240,6 +231,62 @@ export async function getDashboardStatsClient(): Promise<{ success: boolean; sta
     const totalPurchases = accessSnapshot.size;
     console.log("Total purchases:", totalPurchases);
 
+    // Group purchases by course
+    const purchaseCountByCourse: Record<string, number> = {};
+    accessSnapshot.docs.forEach((doc: any) => {
+      const courseId = doc.data()["courseId"];
+      if (courseId) {
+        purchaseCountByCourse[courseId] = (purchaseCountByCourse[courseId] || 0) + 1;
+      }
+    });
+
+    // Get ratings
+    const ratingsRef = collection(db, "courseRatings");
+    let ratingsSnapshot;
+    let ratingsByCourse: Record<string, { total: number; 1: number; 2: number; 3: number; 4: number; 5: number }> = {};
+    try {
+      ratingsSnapshot = await getDocs(ratingsRef);
+      ratingsSnapshot.docs.forEach((doc: any) => {
+        const data = doc.data();
+        const courseId = data.courseId;
+        const rating = Math.round(data.rating);
+        if (courseId && rating >= 1 && rating <= 5) {
+          if (!ratingsByCourse[courseId]) {
+            ratingsByCourse[courseId] = { total: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+          }
+          ratingsByCourse[courseId].total += 1;
+          (ratingsByCourse[courseId] as any)[rating] += 1;
+        }
+      });
+    } catch (e) {
+      console.error("Error fetching ratings:", e);
+    }
+
+    // Map course data with purchase counts and ratings
+    const courseStats = coursesSnapshot.docs.map((doc: any) => {
+      return {
+        id: doc.id,
+        title: doc.data()["title"] || "Unknown Course",
+        purchases: purchaseCountByCourse[doc.id] || 0,
+        ratings: ratingsByCourse[doc.id] || { total: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      };
+    }).sort((a: any, b: any) => b.purchases - a.purchases);
+
+
+    // Fetch user suggestions
+    let suggestions: { name: string; feedback: string; createdAt: string }[] = [];
+    try {
+      const suggestionsRef = collection(db, "suggestions");
+      const suggestionsSnap = await getDocs(query(suggestionsRef, orderBy("createdAt", "desc")));
+      suggestions = suggestionsSnap.docs.map((d: any) => ({
+        name: d.data()["name"] || "Anonymous",
+        feedback: d.data()["feedback"] || "",
+        createdAt: d.data()["createdAt"] || "",
+      }));
+    } catch (e) {
+      console.error("Error fetching suggestions:", e);
+    }
+
     // Calculate total revenue (would need order data; returning 0 for now)
     const totalRevenue = 0;
 
@@ -249,6 +296,8 @@ export async function getDashboardStatsClient(): Promise<{ success: boolean; sta
       totalUsers: uniqueUsers,
       totalPurchases,
       totalRevenue,
+      courseStats,
+      suggestions,
     };
     
     console.log("Dashboard stats:", stats);
@@ -268,6 +317,7 @@ export async function getDashboardStatsClient(): Promise<{ success: boolean; sta
         totalUsers: 0,
         totalPurchases: 0,
         totalRevenue: 0,
+        courseStats: [],
       },
     };
   }
