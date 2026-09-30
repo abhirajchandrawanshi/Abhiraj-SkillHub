@@ -273,16 +273,26 @@ export async function getDashboardStatsClient(): Promise<{ success: boolean; sta
     }).sort((a: any, b: any) => b.purchases - a.purchases);
 
 
-    // Fetch user suggestions
+    // Fetch user suggestions (only from the last 48 hours)
     let suggestions: { name: string; feedback: string; createdAt: string }[] = [];
     try {
       const suggestionsRef = collection(db, "suggestions");
       const suggestionsSnap = await getDocs(query(suggestionsRef, orderBy("createdAt", "desc")));
-      suggestions = suggestionsSnap.docs.map((d: any) => ({
-        name: d.data()["name"] || "Anonymous",
-        feedback: d.data()["feedback"] || "",
-        createdAt: d.data()["createdAt"] || "",
-      }));
+      
+      const FORTY_EIGHT_HOURS = 48 * 60 * 60 * 1000;
+      const now = Date.now();
+      
+      suggestions = suggestionsSnap.docs
+        .map((d: any) => ({
+          name: d.data()["name"] || "Anonymous",
+          feedback: d.data()["feedback"] || "",
+          createdAt: d.data()["createdAt"] || "",
+        }))
+        .filter((s) => {
+          if (!s.createdAt) return false;
+          const time = new Date(s.createdAt).getTime();
+          return now - time <= FORTY_EIGHT_HOURS;
+        });
     } catch (e) {
       console.error("Error fetching suggestions:", e);
     }

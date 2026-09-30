@@ -11,6 +11,8 @@ import {
   MoreVertical,
   Filter,
   Loader2,
+  Gift,
+  Star,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -66,8 +68,10 @@ function AdminCourses() {
   >("all");
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [addCourseType, setAddCourseType] = useState<"free" | "exclusive">("exclusive");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [courseToDelete, setCourseToDelete] = useState<string | null>(null);
+  const [courseTypeFilter, setCourseTypeFilter] = useState<"all" | "free" | "exclusive">("all");
 
   const {
     data: coursesData,
@@ -128,7 +132,13 @@ function AdminCourses() {
     const matchesStatus =
       statusFilter === "all" || course.status === statusFilter;
 
-    return matchesSearch && matchesStatus;
+    const isFree = (course as any).isFree === true || course.price === 0;
+    const matchesType =
+      courseTypeFilter === "all" ||
+      (courseTypeFilter === "free" && isFree) ||
+      (courseTypeFilter === "exclusive" && !isFree);
+
+    return matchesSearch && matchesStatus && matchesType;
   });
 
   const handleEdit = (course: Course) => {
@@ -181,10 +191,23 @@ function AdminCourses() {
               Manage your course catalog
             </p>
           </div>
-          <Button onClick={() => setShowAddDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Course
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => { setAddCourseType("free"); setShowAddDialog(true); }}
+              className="border-green-500/50 text-green-600 hover:bg-green-500/10 hover:border-green-500"
+            >
+              <Gift className="h-4 w-4 mr-2" />
+              Add Free Course
+            </Button>
+            <Button
+              onClick={() => { setAddCourseType("exclusive"); setShowAddDialog(true); }}
+              className="bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600"
+            >
+              <Star className="h-4 w-4 mr-2 fill-white" />
+              Add Exclusive Course
+            </Button>
+          </div>
         </div>
 
         <Card>
@@ -201,6 +224,15 @@ function AdminCourses() {
               </div>
               <div className="flex items-center gap-2">
                 <Filter className="h-4 w-4 text-muted-foreground" />
+                <select
+                  value={courseTypeFilter}
+                  onChange={(e) => setCourseTypeFilter(e.target.value as "all" | "free" | "exclusive")}
+                  className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="all">All Types</option>
+                  <option value="exclusive">⭐ Exclusive</option>
+                  <option value="free">🎁 Free</option>
+                </select>
                 <select
                   value={statusFilter}
                   onChange={(e) =>
@@ -232,6 +264,7 @@ function AdminCourses() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Course</TableHead>
+                      <TableHead>Type</TableHead>
                       <TableHead>Price</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Created</TableHead>
@@ -257,6 +290,19 @@ function AdminCourses() {
                               </div>
                             </div>
                           </div>
+                        </TableCell>
+
+                        {/* Type badge */}
+                        <TableCell>
+                          {(course as any).isFree === true || course.price === 0 ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold bg-green-500/15 text-green-600 px-2.5 py-1 rounded-full">
+                              🎁 Free
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold bg-amber-500/15 text-amber-600 px-2.5 py-1 rounded-full">
+                              ⭐ Exclusive
+                            </span>
+                          )}
                         </TableCell>
 
                         <TableCell>
@@ -345,6 +391,7 @@ function AdminCourses() {
         <CourseFormDialog
           open={showAddDialog}
           onOpenChange={setShowAddDialog}
+          defaultCourseType={addCourseType}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ["admin-courses"] });
             queryClient.invalidateQueries({

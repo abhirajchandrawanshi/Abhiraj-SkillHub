@@ -10,7 +10,7 @@ import {
 
 export type Theme = "light" | "dark";
 
-const STORAGE_KEY = "skillearn-theme";
+const STORAGE_KEY = "abhiacademy-theme";
 
 type ThemeContextValue = {
   theme: Theme;

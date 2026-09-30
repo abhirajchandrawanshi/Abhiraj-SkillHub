@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Upload, Plus, Trash2, FileText, Link as LinkIcon } from "lucide-react";
+import { Loader2, Upload, Plus, Trash2, FileText, Link as LinkIcon, Gift, Star } from "lucide-react";
 import { uploadToSupabase } from "@/services/storage/supabase-storage";
 import { uploadCoursePdf } from "@/services/storage/supabase-server";
 
@@ -37,6 +37,7 @@ const courseFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
   subtitle: z.string().min(1, "Subtitle is required"),
   description: z.string().min(1, "Description is required"),
+  courseType: z.enum(["exclusive", "free"]),
   price: z.number().min(0, "Price must be positive"),
   originalPrice: z.number().optional(),
   discount: z.number().optional(),
@@ -61,6 +62,8 @@ interface CourseFormDialogProps {
   onOpenChange: (open: boolean) => void;
   course?: Course | null;
   onSuccess?: () => void;
+  /** Pre-select course type when opening the dialog */
+  defaultCourseType?: "free" | "exclusive";
 }
 
 
@@ -70,6 +73,7 @@ export function CourseFormDialog({
   onOpenChange,
   course,
   onSuccess,
+  defaultCourseType = "exclusive",
 }: CourseFormDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -95,7 +99,8 @@ export function CourseFormDialog({
       title: "",
       subtitle: "",
       description: "",
-      price: 0,
+      courseType: defaultCourseType,
+      price: defaultCourseType === "free" ? 0 : 0,
       originalPrice: undefined,
       discount: undefined,
       thumbnail: "",
@@ -115,14 +120,17 @@ export function CourseFormDialog({
 
   const status = watch("status");
   const currentPdfPath = watch("pdfPath");
+  const courseType = watch("courseType");
 
   // Populate form when editing
   useEffect(() => {
     if (course) {
+      const isFree = (course as any).isFree === true || course.price === 0;
       reset({
         title: course.title,
         subtitle: course.subtitle,
         description: course.description,
+        courseType: isFree ? "free" : "exclusive",
         price: course.price,
         originalPrice: course.originalPrice,
         discount: course.discount,
@@ -141,10 +149,30 @@ export function CourseFormDialog({
       });
       setResources(course.resources || []);
     } else {
-      reset();
+      reset({
+        courseType: defaultCourseType,
+        price: 0,
+        status: "draft",
+        title: "",
+        subtitle: "",
+        description: "",
+        originalPrice: undefined,
+        discount: undefined,
+        thumbnail: "",
+        instructor: "",
+        details: "",
+        accessInfo: "",
+        metaTitle: "",
+        metaDescription: "",
+        pdfPath: "",
+        resources: [],
+        rating: undefined,
+        ratingCount: undefined,
+        publishedDate: "",
+      });
       setResources([]);
     }
-  }, [course, reset]);
+  }, [course, reset, defaultCourseType]);
 
   const addResource = () => {
     if (!resourceLabel.trim() || !resourceUrl.trim()) return;
@@ -231,17 +259,26 @@ export function CourseFormDialog({
       // Include resources
       values.resources = resources;
 
+      // Derive isFree from courseType
+      const isFree = values.courseType === "free";
+      if (isFree) {
+        values.price = 0;
+        (values as any).originalPrice = undefined;
+      }
+
       if (course) {
         // Filter out undefined values to match Course type
         const updateData: Partial<Course> = {};
         Object.entries(values).forEach(([key, value]) => {
-          if (value !== undefined) {
+          if (value !== undefined && key !== "courseType") {
             (updateData as any)[key] = value;
           }
         });
+        (updateData as any).isFree = isFree;
         await updateCourseClient(course.id, updateData);
       } else {
-        await createCourseClient(values as any);
+        const { courseType: _ct, ...rest } = values as any;
+        await createCourseClient({ ...rest, isFree } as any);
       }
       
       onSuccess?.();
@@ -273,6 +310,49 @@ export function CourseFormDialog({
               {error}
             </div>
           )}
+
+          {/* ── Course Type Selector ── */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-foreground">Course Type *</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setValue("courseType", "exclusive");
+                }}
+                className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-all ${
+                  courseType === "exclusive"
+                    ? "border-amber-500 bg-amber-500/10"
+                    : "border-border bg-secondary/30 hover:border-amber-500/50"
+                }`}
+              >
+                <Star className={`h-6 w-6 shrink-0 ${courseType === "exclusive" ? "text-amber-500 fill-amber-500" : "text-muted-foreground"}`} />
+                <div>
+                  <p className={`text-sm font-bold ${courseType === "exclusive" ? "text-amber-600" : "text-foreground"}`}>Exclusive</p>
+                  <p className="text-xs text-muted-foreground">Paid premium course</p>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setValue("courseType", "free");
+                  setValue("price", 0);
+                  setValue("originalPrice", undefined);
+                }}
+                className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-all ${
+                  courseType === "free"
+                    ? "border-green-500 bg-green-500/10"
+                    : "border-border bg-secondary/30 hover:border-green-500/50"
+                }`}
+              >
+                <Gift className={`h-6 w-6 shrink-0 ${courseType === "free" ? "text-green-500" : "text-muted-foreground"}`} />
+                <div>
+                  <p className={`text-sm font-bold ${courseType === "free" ? "text-green-600" : "text-foreground"}`}>Free</p>
+                  <p className="text-xs text-muted-foreground">No payment required</p>
+                </div>
+              </button>
+            </div>
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="title">Course Title *</Label>
@@ -348,13 +428,15 @@ export function CourseFormDialog({
 
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
-              <Label htmlFor="price">Price (₹) *</Label>
+              <Label htmlFor="price">Price (₹) {courseType === "free" ? <span className="text-green-600 font-normal">(locked at ₹0)</span> : "*"}</Label>
               <Input
                 id="price"
                 type="number"
                 min="0"
                 step="1"
                 placeholder="999"
+                disabled={courseType === "free"}
+                className={courseType === "free" ? "opacity-50 cursor-not-allowed" : ""}
                 {...register("price", { valueAsNumber: true })}
               />
               {errors.price && (
@@ -370,6 +452,8 @@ export function CourseFormDialog({
                 min="0"
                 step="1"
                 placeholder="1999"
+                disabled={courseType === "free"}
+                className={courseType === "free" ? "opacity-50 cursor-not-allowed" : ""}
                 {...register("originalPrice", { valueAsNumber: true })}
               />
             </div>
@@ -383,6 +467,8 @@ export function CourseFormDialog({
                 max="100"
                 step="1"
                 placeholder="50"
+                disabled={courseType === "free"}
+                className={courseType === "free" ? "opacity-50 cursor-not-allowed" : ""}
                 {...register("discount", { valueAsNumber: true })}
               />
             </div>

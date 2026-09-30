@@ -48,7 +48,7 @@ import type { Course } from "@/services/database/firebase-courses";
 import { createSignedPdfUrl } from "@/services/storage/supabase-server";
 import type { BundleOffer } from "@/lib/bundle-offers";
 
-const SITE_TITLE = "Skillearn";
+const SITE_TITLE = "AbhiAcademy";
 
 export const Route = createFileRoute("/")(({
   head: () => ({
@@ -117,7 +117,7 @@ function growingRatingCount(target: number, publishedDateStr: string, courseId: 
   const schedule = [0.08, 0.21, 0.36, 0.50, 0.69, 0.85];
   let base = 0;
   if (days < schedule.length) {
-    base = schedule[days];
+    base = schedule[days] || 0;
   } else {
     const extraDays = days - (schedule.length - 1);
     base = 0.85 + (0.15 * (1 - Math.pow(0.8, extraDays)));
@@ -209,6 +209,7 @@ function CourseCard({
       }, 120_000); // 2 minutes
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [hasRated, ratingFaded]);
 
   const handleCourseAccess = async () => {
@@ -502,6 +503,9 @@ function Landing() {
 
   const clearSearch = () => setSearchQuery("");
 
+  // Tab state: 'free' | 'exclusive'
+  const [activeTab, setActiveTab] = useState<'free' | 'exclusive'>('exclusive');
+
   // Sort state
   const [sortType, setSortType] = useState<"latest" | "popular">("latest");
 
@@ -530,20 +534,31 @@ function Landing() {
     return dateB.localeCompare(dateA);
   });
 
-  // Filter by search query across all relevant text fields
-  const filteredCourses = searchQuery.trim()
-    ? dynamicCourses.filter((c) => {
-      const q = searchQuery.toLowerCase();
-      return (
-        c.title?.toLowerCase().includes(q) ||
-        c.subtitle?.toLowerCase().includes(q) ||
-        c.description?.toLowerCase().includes(q) ||
-        c.category?.toLowerCase().includes(q) ||
-        c.instructor?.toLowerCase().includes(q) ||
-        c.accessInfo?.toLowerCase().includes(q)
-      );
-    })
-    : dynamicCourses;
+  // Split into free (price === 0) and exclusive (price > 0)
+  const freeCourses = dynamicCourses.filter((c) => c.price === 0 || (c as any).isFree === true);
+  const exclusiveCourses = dynamicCourses.filter((c) => c.price > 0 && (c as any).isFree !== true);
+
+  // Apply search filter
+  const applySearch = (courses: typeof dynamicCourses) =>
+    searchQuery.trim()
+      ? courses.filter((c) => {
+          const q = searchQuery.toLowerCase();
+          return (
+            c.title?.toLowerCase().includes(q) ||
+            c.subtitle?.toLowerCase().includes(q) ||
+            c.description?.toLowerCase().includes(q) ||
+            c.category?.toLowerCase().includes(q) ||
+            c.instructor?.toLowerCase().includes(q) ||
+            c.accessInfo?.toLowerCase().includes(q)
+          );
+        })
+      : courses;
+
+  const filteredFree = applySearch(freeCourses);
+  const filteredExclusive = applySearch(exclusiveCourses);
+
+  // Keep filteredCourses for legacy search label
+  const filteredCourses = applySearch(dynamicCourses);
 
   // Track which nav section is active
   const [activeSection, setActiveSection] = useState<'home' | 'courses' | 'about'>('home');
@@ -613,7 +628,7 @@ function Landing() {
         <div className="mx-auto flex max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-10">
             <a href="#top" className="font-display text-2xl font-bold tracking-tight">
-              Skillearn
+              AbhiAcademy
             </a>
             <nav className="hidden items-center gap-8 text-sm font-medium md:flex">
               <button
@@ -799,19 +814,51 @@ function Landing() {
         {/* Dynamic Courses Section */}
         <section id="courses" className="pb-24 pt-6">
           <div className="mx-auto max-w-[1400px] px-6">
+
+            {/* ── Tab Buttons + Controls Row ── */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.5, delay: 0.2 }}
               className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
             >
-              <h2 className="font-display text-2xl font-bold text-foreground">
-                {searchQuery.trim()
-                  ? filteredCourses.length > 0
-                    ? `${filteredCourses.length} result${filteredCourses.length === 1 ? '' : 's'} for "${searchQuery}"`
-                    : `No results for "${searchQuery}"`
-                  : 'All Courses'}
-              </h2>
+              {/* Tab Switcher */}
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-secondary/60 border border-border/40 w-fit">
+                <button
+                  onClick={() => setActiveTab('exclusive')}
+                  className={`relative px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                    activeTab === 'exclusive'
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/30'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  ⭐ Exclusive Courses
+                  {exclusiveCourses.length > 0 && (
+                    <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                      activeTab === 'exclusive' ? 'bg-white/20 text-white' : 'bg-amber-500/15 text-amber-600'
+                    }`}>
+                      {exclusiveCourses.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab('free')}
+                  className={`relative px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                    activeTab === 'free'
+                      ? 'bg-green-500 text-white shadow-md shadow-green-500/30'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  🎁 Free Courses
+                  {freeCourses.length > 0 && (
+                    <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                      activeTab === 'free' ? 'bg-white/20 text-white' : 'bg-green-500/15 text-green-600'
+                    }`}>
+                      {freeCourses.length}
+                    </span>
+                  )}
+                </button>
+              </div>
 
               <div className="flex items-center gap-3">
                 {/* Cart summary button (if items in cart) */}
@@ -829,9 +876,9 @@ function Landing() {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <BorderBeamPanel 
-                      radius={6} 
-                      thickness={2} 
+                    <BorderBeamPanel
+                      radius={6}
+                      thickness={2}
                       glow={false}
                       className="p-0 border border-primary/20 bg-card hover:bg-secondary/50 transition-all cursor-pointer rounded-lg shadow-sm w-fit"
                       role="button"
@@ -854,30 +901,100 @@ function Landing() {
               </div>
             </motion.div>
 
+            {/* ── Search result label ── */}
+            {searchQuery.trim() && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="mb-4 text-sm text-muted-foreground"
+              >
+                {filteredCourses.length > 0
+                  ? `${filteredCourses.length} result${filteredCourses.length === 1 ? '' : 's'} for "${searchQuery}"`
+                  : `No results for "${searchQuery}"`}
+              </motion.p>
+            )}
+
+            {/* ── Course Lists ── */}
             {!isMounted || coursesLoading ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
               </div>
-            ) : filteredCourses.length > 0 ? (
-              <div className="flex flex-col gap-6">
-                {filteredCourses.map((course, index) => (
-                  <CourseCard key={course.id} course={course} onEnroll={handleDynamicCourseAccess} index={index} />
-                ))}
-              </div>
-            ) : searchQuery.trim() ? (
-              <div className="text-center py-16">
-                <Search className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                <p className="text-muted-foreground font-medium">No courses match &ldquo;{searchQuery}&rdquo;</p>
-                <p className="text-sm text-muted-foreground mt-1">Try a different keyword — course name, topic, or instructor</p>
-                <button
-                  onClick={clearSearch}
-                  className="mt-4 text-sm text-primary hover:underline"
-                >Clear search</button>
-              </div>
             ) : (
-              <div className="text-center py-12 text-muted-foreground">
-                No courses available at the moment. Please check back later.
-              </div>
+              <AnimatePresence mode="wait">
+                {activeTab === 'free' ? (
+                  <motion.div
+                    key="free"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.25 }}
+                  >
+                    {/* Free Courses Section Header */}
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="h-8 w-1 rounded-full bg-green-500" />
+                      <div>
+                        <h2 className="font-display text-xl font-bold text-foreground">Free Courses</h2>
+                        <p className="text-xs text-muted-foreground">Completely free — no payment required</p>
+                      </div>
+                    </div>
+                    {filteredFree.length > 0 ? (
+                      <div className="flex flex-col gap-6">
+                        {filteredFree.map((course, index) => (
+                          <CourseCard key={course.id} course={course} onEnroll={handleDynamicCourseAccess} index={index} />
+                        ))}
+                      </div>
+                    ) : searchQuery.trim() ? (
+                      <div className="text-center py-16">
+                        <Search className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+                        <p className="text-muted-foreground font-medium">No free courses match &ldquo;{searchQuery}&rdquo;</p>
+                        <button onClick={clearSearch} className="mt-4 text-sm text-primary hover:underline">Clear search</button>
+                      </div>
+                    ) : (
+                      <div className="text-center py-16 rounded-2xl border border-dashed border-green-500/30 bg-green-500/5">
+                        <span className="text-4xl mb-3 block">🎁</span>
+                        <p className="text-muted-foreground font-medium">No free courses yet</p>
+                        <p className="text-sm text-muted-foreground mt-1">Check back soon — free content is coming!</p>
+                      </div>
+                    )}
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="exclusive"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.25 }}
+                  >
+                    {/* Exclusive Courses Section Header */}
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="h-8 w-1 rounded-full bg-gradient-to-b from-amber-400 to-orange-500" />
+                      <div>
+                        <h2 className="font-display text-xl font-bold text-foreground">Exclusive Courses</h2>
+                        <p className="text-xs text-muted-foreground">Premium content crafted by industry experts</p>
+                      </div>
+                    </div>
+                    {filteredExclusive.length > 0 ? (
+                      <div className="flex flex-col gap-6">
+                        {filteredExclusive.map((course, index) => (
+                          <CourseCard key={course.id} course={course} onEnroll={handleDynamicCourseAccess} index={index} />
+                        ))}
+                      </div>
+                    ) : searchQuery.trim() ? (
+                      <div className="text-center py-16">
+                        <Search className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+                        <p className="text-muted-foreground font-medium">No exclusive courses match &ldquo;{searchQuery}&rdquo;</p>
+                        <button onClick={clearSearch} className="mt-4 text-sm text-primary hover:underline">Clear search</button>
+                      </div>
+                    ) : (
+                      <div className="text-center py-16 rounded-2xl border border-dashed border-amber-500/30 bg-amber-500/5">
+                        <span className="text-4xl mb-3 block">⭐</span>
+                        <p className="text-muted-foreground font-medium">No exclusive courses yet</p>
+                        <p className="text-sm text-muted-foreground mt-1">Premium courses are being added soon!</p>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             )}
           </div>
         </section>
@@ -910,7 +1027,7 @@ function Landing() {
 
           {/* ── About blurb ── */}
           <div className="text-center mb-10">
-            <span className="font-display text-3xl font-bold tracking-tight text-foreground">Skillearn</span>
+            <span className="font-display text-3xl font-bold tracking-tight text-foreground">AbhiAcademy</span>
             <p className="mt-3 text-base font-medium text-foreground leading-relaxed max-w-md mx-auto">
               Built by <span className="font-bold text-primary">Abhiraj Chandrawanshi</span> — a developer &amp; educator making practical skills accessible to everyone.
             </p>
@@ -982,7 +1099,7 @@ function Landing() {
 
           {/* ── Bottom bar ── */}
           <div className="border-t border-border/30 pt-6 text-center">
-            <span className="text-sm font-semibold text-foreground">© 2026 Skillearn by Abhiraj Chandrawanshi. All rights reserved.</span>
+            <span className="text-sm font-semibold text-foreground">© 2026 AbhiAcademy by Abhiraj Chandrawanshi. All rights reserved.</span>
           </div>
 
         </div>

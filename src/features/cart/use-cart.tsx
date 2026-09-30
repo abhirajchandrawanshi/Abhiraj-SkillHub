@@ -12,7 +12,7 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-const CART_STORAGE_KEY = "skillearn-cart";
+const CART_STORAGE_KEY = "abhiacademy-cart";
 
 function loadCartFromStorage(): Course[] {
   if (typeof window === "undefined") return [];

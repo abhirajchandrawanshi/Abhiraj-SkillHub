@@ -28,52 +28,32 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     role: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
-
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) {
-      setLoading(false);
-      return;
-    }
-
     let unsubscribe: (() => void) | null = null;
     let isSubscribed = true;
 
     const setupAuth = async () => {
       try {
-        // Wait for Firebase to initialize
         await initializeFirebase();
-        
         if (!isSubscribed) return;
 
         const auth = getAuthInstance();
         if (!auth) {
           console.error("Firebase auth not initialized");
-          setLoading(false);
+          if (isSubscribed) setLoading(false);
           return;
         }
 
         unsubscribe = onAuthStateChanged(auth, (user: User | null) => {
           if (!isSubscribed) return;
-          
+
           if (user) {
-            // Check if the user is the admin user
             const adminEmail = "va7058060@gmail.com";
-            
             if (user.email === adminEmail) {
               setAdminUser({ uid: user.uid, email: user.email! });
-              setAdminData({
-                uid: user.uid,
-                email: user.email!,
-                role: "superadmin",
-              });
+              setAdminData({ uid: user.uid, email: user.email!, role: "superadmin" });
               setIsAdmin(true);
             } else {
-              // User is authenticated but not the admin
               setAdminUser(null);
               setAdminData(null);
               setIsAdmin(false);
@@ -87,9 +67,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
         });
       } catch (error) {
         console.error("Error setting up admin auth:", error);
-        if (isSubscribed) {
-          setLoading(false);
-        }
+        if (isSubscribed) setLoading(false);
       }
     };
 
@@ -97,11 +75,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       isSubscribed = false;
-      if (unsubscribe) {
-        unsubscribe();
-      }
+      if (unsubscribe) unsubscribe();
     };
-  }, [mounted]);
+  }, []);
 
   const adminLogin = async (email: string, password: string) => {
     try {
