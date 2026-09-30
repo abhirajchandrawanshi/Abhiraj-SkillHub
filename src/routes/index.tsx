@@ -58,9 +58,9 @@ export const Route = createFileRoute("/")(({
     ],
   }),
   component: () => (
-    <CartProvider>
-      <Landing />
-    </CartProvider>
+    <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#111', color: '#fff', textAlign: 'center', padding: '2rem' }}>
+      <h1 style={{ fontSize: '4rem', fontWeight: 'bold', fontFamily: 'sans-serif' }}>Website Under Work.<br/>Please try visiting after an hour.</h1>
+    </div>
   ),
 } as any));
 
