@@ -546,11 +546,13 @@ function FreeCourseCard({
 
       {/* Title & subtitle */}
       <div className="flex flex-col items-center mt-2 px-2 text-center w-full">
-        <h3 className="font-display text-lg sm:text-xl font-bold leading-snug text-foreground line-clamp-2 border border-foreground/50 rounded-lg px-4 py-2 w-full bg-background/80 backdrop-blur-sm">
-          {course.title}
-        </h3>
+        <div className="border border-foreground/50 rounded-lg px-3 py-2 w-full bg-background/80 backdrop-blur-sm flex items-center justify-center min-h-[3rem]">
+          <h3 className="font-display text-base sm:text-lg lg:text-xl font-bold leading-tight text-foreground">
+            {course.title}
+          </h3>
+        </div>
         {course.subtitle && (
-          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{course.subtitle}</p>
+          <p className="text-xs text-muted-foreground line-clamp-1 mt-1.5">{course.subtitle}</p>
         )}
       </div>
 
@@ -1044,7 +1046,7 @@ function Landing() {
                       </div>
                     </div>
                     {filteredFree.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+                      <div className="grid grid-cols-1 min-[450px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5 sm:gap-6">
                         {filteredFree.map((course, index) => (
                           <FreeCourseCard key={course.id} course={course} index={index} />
                         ))}
