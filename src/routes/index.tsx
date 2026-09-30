@@ -274,9 +274,13 @@ function CourseCard({
   // Fluctuate rating ±0.1 deterministically each calendar day
   const rating = fluctuatingRating(baseRating, course.id);
 
-  const formattedRatingCount = displayedCount >= 1000
-    ? (displayedCount / 1000).toFixed(1) + "K"
-    : displayedCount.toString();
+  const isFree = course.price === 0 || course.isFree === true;
+
+  const formattedRatingCount = !isFree
+    ? (displayedCount >= 1000
+        ? (displayedCount / 1000).toFixed(1) + "K"
+        : displayedCount.toString())
+    : null;
 
   const publishedDate = course.publishedDate
     ? new Date(course.publishedDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })
@@ -351,7 +355,9 @@ function CourseCard({
           <div className="flex items-center gap-1 font-semibold text-amber-500">
             <Star className="h-4 w-4 fill-amber-500" />
             <span>{rating.toFixed(1)}</span>
-            <span className="text-muted-foreground font-normal text-xs">({formattedRatingCount} reviews)</span>
+            {formattedRatingCount && (
+              <span className="text-muted-foreground font-normal text-xs">({formattedRatingCount} reviews)</span>
+            )}
           </div>
         </div>
 
@@ -418,8 +424,8 @@ function CourseCard({
           </div>
         </div>
 
-        {/* Rating (enrolled users only) */}
-        {courseAccess && (
+        {/* Rating (enrolled users only, not for free courses) */}
+        {courseAccess && !isFree && (
           <AnimatePresence>
             {(!hasRated || !ratingFaded) && (
               <motion.div
@@ -462,6 +468,107 @@ function CourseCard({
         )}
       </div>
 
+    </motion.div>
+  );
+}
+
+// --- FreeCourseCard (Flipkart-style compact grid card) ---
+function FreeCourseCard({
+  course,
+  index,
+}: {
+  course: Course;
+  index: number;
+}) {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+
+  const handleAccess = async () => {
+    setLoading(true);
+    try {
+      // Try PDF first
+      if (course.pdfPath) {
+        const userId = user?.uid || readCourseAccess(course.id)?.userId || readCourseAccess(course.id)?.email || "";
+        if (userId) {
+          const result = await createSignedPdfUrl({
+            data: { courseId: course.id, pdfPath: course.pdfPath, userId },
+          });
+          window.open(result.signedUrl, "_blank");
+          return;
+        }
+      }
+      // Try resource links
+      if (course.resources && course.resources.length > 0 && course.resources[0].url) {
+        window.open(course.resources[0].url, "_blank");
+        return;
+      }
+      // Try accessInfo URL
+      if (course.accessInfo && (course.accessInfo.startsWith("http") || course.accessInfo.startsWith("/"))) {
+        window.open(course.accessInfo, "_blank");
+        return;
+      }
+      // Fallback
+      if (course.accessInfo) {
+        alert(`Access info: ${course.accessInfo}`);
+      } else {
+        alert(`${course.title} — content coming soon!`);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to access this resource.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: index * 0.05 }}
+      className="group flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-xl rounded-2xl"
+    >
+      {/* Thumbnail */}
+      <div className="relative w-full aspect-[4/3] overflow-hidden rounded-xl bg-secondary/50 mb-3">
+        {course.thumbnail ? (
+          <img
+            src={course.thumbnail}
+            alt={course.title}
+            className="h-full w-full object-cover group-hover:scale-[1.04] transition-transform duration-500"
+          />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-green-500/10 to-emerald-500/5">
+            <span className="text-5xl">📚</span>
+          </div>
+        )}
+        {/* Hover overlay */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+      </div>
+
+      {/* Title & subtitle */}
+      <div className="flex flex-col items-center mt-2 px-2 text-center w-full">
+        <h3 className="font-display text-lg sm:text-xl font-bold leading-snug text-foreground line-clamp-2 border border-foreground/50 rounded-lg px-4 py-2 w-full bg-background/80 backdrop-blur-sm">
+          {course.title}
+        </h3>
+        {course.subtitle && (
+          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{course.subtitle}</p>
+        )}
+      </div>
+
+      {/* Access button */}
+      <div className="flex justify-center mt-4">
+        <Button
+          onClick={handleAccess}
+          disabled={loading}
+          size="sm"
+          className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-6 transition-transform hover:scale-105 active:scale-95 shadow-sm w-full max-w-[200px] cursor-pointer"
+        >
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            "Access Course"
+          )}
+        </Button>
+      </div>
     </motion.div>
   );
 }
@@ -535,8 +642,8 @@ function Landing() {
   });
 
   // Split into free (price === 0) and exclusive (price > 0)
-  const freeCourses = dynamicCourses.filter((c) => c.price === 0 || (c as any).isFree === true);
-  const exclusiveCourses = dynamicCourses.filter((c) => c.price > 0 && (c as any).isFree !== true);
+  const freeCourses = dynamicCourses.filter((c) => c.price === 0 || c.isFree === true);
+  const exclusiveCourses = dynamicCourses.filter((c) => c.price > 0 && c.isFree !== true);
 
   // Apply search filter
   const applySearch = (courses: typeof dynamicCourses) =>
@@ -627,21 +734,21 @@ function Landing() {
       <header className="sticky top-0 z-50 py-4 border-b border-border/20 backdrop-blur-md" style={{ background: isDark ? 'rgba(22,22,24,0.80)' : 'rgba(248,249,251,0.80)' }}>
         <div className="mx-auto flex max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-10">
-            <a href="#top" className="font-display text-2xl font-bold tracking-tight">
+            <span className="font-display text-2xl font-bold tracking-tight">
               AbhiAcademy
-            </a>
+            </span>
             <nav className="hidden items-center gap-8 text-sm font-medium md:flex">
               <button
                 onClick={() => scrollTo("home")}
-                className={activeSection === 'home' ? "border-b-2 border-foreground pb-1 text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}
+                className={`cursor-pointer ${activeSection === 'home' ? "border-b-2 border-foreground pb-1 text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}`}
               >Home</button>
               <button
                 onClick={() => scrollTo("courses")}
-                className={activeSection === 'courses' ? "border-b-2 border-foreground pb-1 text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}
+                className={`cursor-pointer ${activeSection === 'courses' ? "border-b-2 border-foreground pb-1 text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}`}
               >Courses</button>
               <button
                 onClick={() => scrollTo("about")}
-                className={activeSection === 'about' ? "border-b-2 border-foreground pb-1 text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}
+                className={`cursor-pointer ${activeSection === 'about' ? "border-b-2 border-foreground pb-1 text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}`}
               >About</button>
             </nav>
           </div>
@@ -826,7 +933,7 @@ function Landing() {
               <div className="flex items-center gap-1 p-1 rounded-xl bg-secondary/60 border border-border/40 w-fit">
                 <button
                   onClick={() => setActiveTab('exclusive')}
-                  className={`relative px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                  className={`cursor-pointer relative px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
                     activeTab === 'exclusive'
                       ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/30'
                       : 'text-muted-foreground hover:text-foreground'
@@ -843,7 +950,7 @@ function Landing() {
                 </button>
                 <button
                   onClick={() => setActiveTab('free')}
-                  className={`relative px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                  className={`cursor-pointer relative px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
                     activeTab === 'free'
                       ? 'bg-green-500 text-white shadow-md shadow-green-500/30'
                       : 'text-muted-foreground hover:text-foreground'
@@ -934,13 +1041,12 @@ function Landing() {
                       <div className="h-8 w-1 rounded-full bg-green-500" />
                       <div>
                         <h2 className="font-display text-xl font-bold text-foreground">Free Courses</h2>
-                        <p className="text-xs text-muted-foreground">Completely free — no payment required</p>
                       </div>
                     </div>
                     {filteredFree.length > 0 ? (
-                      <div className="flex flex-col gap-6">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
                         {filteredFree.map((course, index) => (
-                          <CourseCard key={course.id} course={course} onEnroll={handleDynamicCourseAccess} index={index} />
+                          <FreeCourseCard key={course.id} course={course} index={index} />
                         ))}
                       </div>
                     ) : searchQuery.trim() ? (

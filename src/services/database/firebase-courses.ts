@@ -48,6 +48,7 @@ export type Course = {
   rating?: number;
   ratingCount?: number;
   publishedDate?: string;
+  isFree?: boolean;
 };
 
 // Course metadata details (from course.ts)

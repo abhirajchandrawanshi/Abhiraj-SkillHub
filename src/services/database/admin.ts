@@ -57,6 +57,11 @@ export interface Course {
   pdfPath?: string;
   // External resource links (YouTube, GitHub, docs, etc.)
   resources?: { label: string; url: string }[];
+  // Rating and metadata
+  rating?: number;
+  ratingCount?: number;
+  publishedDate?: string;
+  isFree?: boolean;
 }
 
 // Client-side admin functions (direct Firebase access)
@@ -112,8 +117,16 @@ export async function createCourseClient(courseData: any): Promise<{ success: bo
     // Remove any existing timestamp fields and add fresh ones
     const { createdAt, updatedAt, id, ...cleanData } = courseData;
     
-    const data: Omit<Course, "id"> = {
-      ...cleanData,
+    // Strip undefined and NaN values — Firestore rejects them
+    const sanitized: Record<string, any> = {};
+    Object.entries(cleanData).forEach(([key, value]) => {
+      if (value !== undefined && !(typeof value === 'number' && isNaN(value))) {
+        sanitized[key] = value;
+      }
+    });
+
+    const data = {
+      ...sanitized,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -137,9 +150,16 @@ export async function updateCourseClient(id: string, updateFields: Partial<Cours
   try {
     const db = getDbSafe();
     const courseRef = doc(db, "courses", id);
+    // Strip undefined and NaN values — Firestore rejects them
+    const sanitized: Record<string, any> = {};
+    Object.entries(updateFields).forEach(([key, value]) => {
+      if (value !== undefined && !(typeof value === 'number' && isNaN(value))) {
+        sanitized[key] = value;
+      }
+    });
 
     await updateDoc(courseRef, {
-      ...updateFields,
+      ...sanitized,
       updatedAt: new Date().toISOString(),
     });
 
@@ -277,7 +297,8 @@ export async function getDashboardStatsClient(): Promise<{ success: boolean; sta
     let suggestions: { name: string; feedback: string; createdAt: string }[] = [];
     try {
       const suggestionsRef = collection(db, "suggestions");
-      const suggestionsSnap = await getDocs(query(suggestionsRef, orderBy("createdAt", "desc")));
+      // Removed orderBy to prevent "index required" errors, sorting client-side instead.
+      const suggestionsSnap = await getDocs(suggestionsRef);
       
       const FORTY_EIGHT_HOURS = 48 * 60 * 60 * 1000;
       const now = Date.now();
@@ -292,7 +313,8 @@ export async function getDashboardStatsClient(): Promise<{ success: boolean; sta
           if (!s.createdAt) return false;
           const time = new Date(s.createdAt).getTime();
           return now - time <= FORTY_EIGHT_HOURS;
-        });
+        })
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } catch (e) {
       console.error("Error fetching suggestions:", e);
     }

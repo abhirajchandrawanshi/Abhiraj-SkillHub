@@ -55,6 +55,28 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
     }
 
+    // Suggestions / Feedback collection
+    match /suggestions/{suggestionId} {
+      // Anyone can submit feedback
+      allow create: if true;
+      // Only admin can read feedback
+      allow read: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
+    }
+
+    match /suggestions {
+      allow read: if request.auth != null && request.auth.token.email == 'va7058060@gmail.com';
+    }
+
+    // Course Ratings collection
+    match /courseRatings/{ratingId} {
+      // Anyone can submit and read ratings
+      allow create, read: if true;
+    }
+
+    match /courseRatings {
+      allow read: if true;
+    }
+
     // Admin users collection - restricted access
     match /adminUsers/{userId} {
       allow read, write: if false; // No direct access, managed via Firebase Console

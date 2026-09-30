@@ -33,14 +33,18 @@ const resourceSchema = z.object({
   url: z.string().url("Must be a valid URL"),
 });
 
+// Helper: convert NaN to undefined so Zod's .optional() accepts empty number inputs
+const nanToUndefined = (v: unknown) =>
+  typeof v === 'number' && isNaN(v) ? undefined : v;
+
 const courseFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
-  subtitle: z.string().min(1, "Subtitle is required"),
-  description: z.string().min(1, "Description is required"),
+  subtitle: z.string().optional(),
+  description: z.string().optional(),
   courseType: z.enum(["exclusive", "free"]),
-  price: z.number().min(0, "Price must be positive"),
-  originalPrice: z.number().optional(),
-  discount: z.number().optional(),
+  price: z.preprocess(nanToUndefined, z.number().min(0, "Price must be positive").default(0)),
+  originalPrice: z.preprocess(nanToUndefined, z.number().optional()),
+  discount: z.preprocess(nanToUndefined, z.number().optional()),
   thumbnail: z.string().optional(),
   instructor: z.string().optional(),
   status: z.enum(["published", "draft"]),
@@ -50,8 +54,8 @@ const courseFormSchema = z.object({
   metaDescription: z.string().optional(),
   pdfPath: z.string().optional(),
   resources: z.array(resourceSchema).optional(),
-  rating: z.number().min(0).max(5).optional(),
-  ratingCount: z.number().min(0).optional(),
+  rating: z.preprocess(nanToUndefined, z.number().min(0).max(5).optional()),
+  ratingCount: z.preprocess(nanToUndefined, z.number().min(0).optional()),
   publishedDate: z.string().optional(),
 });
 
@@ -263,7 +267,7 @@ export function CourseFormDialog({
       const isFree = values.courseType === "free";
       if (isFree) {
         values.price = 0;
-        (values as any).originalPrice = undefined;
+        values.ratingCount = undefined;
       }
 
       if (course) {
@@ -278,7 +282,14 @@ export function CourseFormDialog({
         await updateCourseClient(course.id, updateData);
       } else {
         const { courseType: _ct, ...rest } = values as any;
-        await createCourseClient({ ...rest, isFree } as any);
+        // Strip undefined and NaN values — Firestore rejects them
+        const cleanCourseData: Record<string, any> = { isFree };
+        Object.entries(rest).forEach(([key, value]) => {
+          if (value !== undefined && !(typeof value === 'number' && isNaN(value))) {
+            cleanCourseData[key] = value;
+          }
+        });
+        await createCourseClient(cleanCourseData);
       }
       
       onSuccess?.();
@@ -304,7 +315,10 @@ export function CourseFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit, (validationErrors) => {
+          console.error("Form validation errors:", validationErrors);
+          setError("Please fix the form errors: " + Object.entries(validationErrors).map(([k, v]) => `${k}: ${(v as any)?.message || 'invalid'}`).join(", "));
+        })} className="space-y-4">
           {error && (
             <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
               {error}
@@ -368,7 +382,7 @@ export function CourseFormDialog({
 
 
           <div className="space-y-2">
-            <Label htmlFor="subtitle">Subtitle *</Label>
+            <Label htmlFor="subtitle">Subtitle</Label>
             <Input
               id="subtitle"
               placeholder="e.g., From beginner to advanced in 12 weeks"
@@ -380,7 +394,7 @@ export function CourseFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description *</Label>
+            <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
               placeholder="Detailed description of the course..."
@@ -392,87 +406,97 @@ export function CourseFormDialog({
             )}
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="rating">Rating (0-5)</Label>
-              <Input
-                id="rating"
-                type="number"
-                min="0"
-                max="5"
-                step="0.1"
-                placeholder="4.8"
-                {...register("rating", { valueAsNumber: true })}
-              />
+          {courseType !== "free" && (
+            <div className={`grid gap-4 ${courseType === "free" ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+              <div className="space-y-2">
+                <Label htmlFor="rating">Rating (0-5)</Label>
+                <Input
+                  id="rating"
+                  type="number"
+                  min="0"
+                  max="5"
+                  step="0.1"
+                  placeholder="4.8"
+                  {...register("rating", { valueAsNumber: true })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ratingCount">Rating Count</Label>
+                <Input
+                  id="ratingCount"
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="1200"
+                  {...register("ratingCount", { valueAsNumber: true })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="publishedDate">Published Date</Label>
+                <Input
+                  id="publishedDate"
+                  type="date"
+                  {...register("publishedDate")}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="ratingCount">Rating Count</Label>
-              <Input
-                id="ratingCount"
-                type="number"
-                min="0"
-                step="1"
-                placeholder="1200"
-                {...register("ratingCount", { valueAsNumber: true })}
-              />
+          )}
+          {courseType === "free" && (
+            <div className="grid gap-4 md:grid-cols-1">
+              <div className="space-y-2">
+                <Label htmlFor="publishedDate">Published Date</Label>
+                <Input
+                  id="publishedDate"
+                  type="date"
+                  {...register("publishedDate")}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="publishedDate">Published Date</Label>
-              <Input
-                id="publishedDate"
-                type="date"
-                {...register("publishedDate")}
-              />
-            </div>
-          </div>
+          )}
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="price">Price (₹) {courseType === "free" ? <span className="text-green-600 font-normal">(locked at ₹0)</span> : "*"}</Label>
-              <Input
-                id="price"
-                type="number"
-                min="0"
-                step="1"
-                placeholder="999"
-                disabled={courseType === "free"}
-                className={courseType === "free" ? "opacity-50 cursor-not-allowed" : ""}
-                {...register("price", { valueAsNumber: true })}
-              />
-              {errors.price && (
-                <p className="text-sm text-destructive">{errors.price.message}</p>
-              )}
-            </div>
+          {courseType !== "free" && (
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="price">Price (₹) *</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="999"
+                  {...register("price", { valueAsNumber: true })}
+                />
+                {errors.price && (
+                  <p className="text-sm text-destructive">{errors.price.message}</p>
+                )}
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="originalPrice">Original Price (₹)</Label>
-              <Input
-                id="originalPrice"
-                type="number"
-                min="0"
-                step="1"
-                placeholder="1999"
-                disabled={courseType === "free"}
-                className={courseType === "free" ? "opacity-50 cursor-not-allowed" : ""}
-                {...register("originalPrice", { valueAsNumber: true })}
-              />
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="originalPrice">Original Price (₹)</Label>
+                <Input
+                  id="originalPrice"
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="1999"
+                  {...register("originalPrice", { valueAsNumber: true })}
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="discount">Discount (%)</Label>
-              <Input
-                id="discount"
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                placeholder="50"
-                disabled={courseType === "free"}
-                className={courseType === "free" ? "opacity-50 cursor-not-allowed" : ""}
-                {...register("discount", { valueAsNumber: true })}
-              />
+              <div className="space-y-2">
+                <Label htmlFor="discount">Discount (%)</Label>
+                <Input
+                  id="discount"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  placeholder="50"
+                  {...register("discount", { valueAsNumber: true })}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
 
 
