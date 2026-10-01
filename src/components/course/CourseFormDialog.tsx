@@ -125,6 +125,20 @@ export function CourseFormDialog({
   const status = watch("status");
   const currentPdfPath = watch("pdfPath");
   const courseType = watch("courseType");
+  const watchedPrice = watch("price");
+  const watchedOriginalPrice = watch("originalPrice");
+
+  // Auto-calculate discount whenever price or originalPrice changes
+  useEffect(() => {
+    const price = Number(watchedPrice);
+    const original = Number(watchedOriginalPrice);
+    if (original > 0 && price >= 0 && price < original) {
+      const calc = Math.round((1 - price / original) * 100);
+      setValue("discount", calc, { shouldValidate: false });
+    } else if (!watchedOriginalPrice || isNaN(original) || original <= 0) {
+      setValue("discount", undefined, { shouldValidate: false });
+    }
+  }, [watchedPrice, watchedOriginalPrice, setValue]);
 
   // Populate form when editing
   useEffect(() => {
@@ -370,9 +384,11 @@ export function CourseFormDialog({
 
           <div className="space-y-2">
             <Label htmlFor="title">Course Title *</Label>
-            <Input
+            <Textarea
               id="title"
               placeholder="e.g., Complete Python Masterclass"
+              rows={2}
+              className="resize-none min-h-[60px] leading-snug"
               {...register("title")}
             />
             {errors.title && (
@@ -484,14 +500,21 @@ export function CourseFormDialog({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="discount">Discount (%)</Label>
+                <Label htmlFor="discount" className="flex items-center gap-2">
+                  Discount (%)
+                  <span className="text-[10px] font-semibold bg-primary/15 text-primary border border-primary/30 px-1.5 py-0.5 rounded-full">
+                    Auto-calculated
+                  </span>
+                </Label>
                 <Input
                   id="discount"
                   type="number"
                   min="0"
                   max="100"
                   step="1"
-                  placeholder="50"
+                  placeholder="Auto"
+                  readOnly
+                  className="bg-secondary/50 cursor-not-allowed text-muted-foreground"
                   {...register("discount", { valueAsNumber: true })}
                 />
               </div>

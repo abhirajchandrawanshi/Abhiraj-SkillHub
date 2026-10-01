@@ -315,7 +315,7 @@ function CourseCard({
 
         {/* ── Row 2: Title (left) + Published Date (right) ── */}
         <div className="flex items-start justify-between gap-3">
-          <h3 className="font-display text-xl sm:text-2xl font-bold leading-snug text-foreground">
+          <h3 className="font-display text-xl sm:text-2xl font-bold leading-snug text-foreground whitespace-pre-line">
             {course.title}
           </h3>
           <span className="shrink-0 whitespace-nowrap rounded-md bg-primary/15 border border-primary/30 px-2.5 py-1 text-sm font-semibold text-primary">
@@ -547,7 +547,7 @@ function FreeCourseCard({
       {/* Title & subtitle */}
       <div className="flex flex-col items-center mt-2 px-2 text-center w-full">
         <div className="border border-foreground/50 rounded-lg px-3 py-2 w-full bg-background/80 backdrop-blur-sm flex items-center justify-center min-h-[3rem]">
-          <h3 className="font-display text-base sm:text-lg lg:text-xl font-bold leading-tight text-foreground">
+          <h3 className="font-display text-base sm:text-lg lg:text-xl font-bold leading-tight text-foreground whitespace-pre-line">
             {course.title}
           </h3>
         </div>
