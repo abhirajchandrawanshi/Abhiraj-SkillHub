@@ -103,7 +103,7 @@ export function CartDrawer({ open, onClose, onCheckout }: CartDrawerProps) {
                         <img
                           src={course.thumbnail}
                           alt={course.title}
-                          className="h-14 w-14 rounded-lg object-cover flex-shrink-0"
+                          className="h-14 w-14 rounded-lg object-contain bg-secondary/60 flex-shrink-0"
                         />
                       )}
                       <div className="flex-1 min-w-0">

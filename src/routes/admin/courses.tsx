@@ -280,7 +280,7 @@ function AdminCourses() {
                               <img
                                 src={course.thumbnail}
                                 alt={course.title}
-                                className="h-12 w-12 rounded-md object-cover"
+                                className="h-12 w-12 rounded-md object-contain bg-secondary/60"
                               />
                             )}
                             <div>

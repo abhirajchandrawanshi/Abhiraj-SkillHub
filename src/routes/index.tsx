@@ -294,12 +294,12 @@ function CourseCard({
       className="group flex flex-col sm:flex-row overflow-hidden rounded-2xl bg-card border border-border shadow-sm hover:shadow-lg hover:border-primary/30 transition-all duration-300"
     >
       {/* ── LEFT: Thumbnail ── */}
-      <div className="w-full sm:w-64 md:w-72 lg:w-80 flex-shrink-0 overflow-hidden bg-secondary min-h-[200px] sm:min-h-[220px]">
+      <div className="w-full sm:w-64 md:w-72 lg:w-80 flex-shrink-0 bg-secondary/60 min-h-[200px] sm:min-h-[220px] flex items-center justify-center overflow-hidden">
         {course.thumbnail ? (
           <img
             src={course.thumbnail}
             alt={course.title}
-            className="h-full w-full object-cover min-h-[200px] sm:min-h-[220px] group-hover:scale-[1.03] transition-transform duration-500"
+            className="w-full h-full object-contain min-h-[200px] sm:min-h-[220px]"
           />
         ) : (
           <div className="h-full min-h-[200px] sm:min-h-[220px] w-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
@@ -528,12 +528,12 @@ function FreeCourseCard({
       className="group flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-xl rounded-2xl"
     >
       {/* Thumbnail */}
-      <div className="relative w-full aspect-[4/3] overflow-hidden rounded-xl bg-secondary/50 mb-3">
+      <div className="relative w-full aspect-[4/3] rounded-xl bg-secondary/60 mb-3 flex items-center justify-center overflow-hidden">
         {course.thumbnail ? (
           <img
             src={course.thumbnail}
             alt={course.title}
-            className="h-full w-full object-cover group-hover:scale-[1.04] transition-transform duration-500"
+            className="w-full h-full object-contain"
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-green-500/10 to-emerald-500/5">
