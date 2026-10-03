@@ -49,10 +49,10 @@ import type { CourseAccess } from "@/services/access/access";
 import { readCourseAccess } from "@/services/access/access";
 import { useQuery } from "@tanstack/react-query";
 import {
-  getPublishedCourses,
   submitCourseRating,
   submitSuggestion,
 } from "@/services/database/firebase-courses";
+import { getPublishedCoursesServer, getPrivateCourseAccessInfo } from "@/services/database/public-server";
 import type { Course } from "@/services/database/firebase-courses";
 import { createSignedPdfUrl } from "@/services/storage/supabase-server";
 import type { BundleOffer } from "@/lib/bundle-offers";
@@ -227,51 +227,63 @@ function CourseCard({
 
   const handleCourseAccess = async () => {
     if (courseAccess) {
-      if (course.pdfPath) {
-        setPdfLoading(true);
-        try {
-          const userId =
-            user?.uid ||
-            readCourseAccess(course.id)?.userId ||
-            readCourseAccess(course.id)?.email ||
-            "";
-          if (!userId) {
-            alert("Unable to verify your identity. Please log in and try again.");
-            return;
-          }
-          const result = await createSignedPdfUrl({
-            data: {
-              courseId: course.id,
-              pdfPath: course.pdfPath,
-              userId,
-            },
-          });
-          window.open(result.signedUrl, "_blank");
-        } catch (err) {
-          alert(err instanceof Error ? err.message : "Failed to access the PDF. Please try again.");
-        } finally {
+      // Now we fetch private resource info securely since it was stripped from public courses
+      setPdfLoading(true);
+      try {
+        const userId =
+          user?.uid ||
+          readCourseAccess(course.id)?.userId ||
+          readCourseAccess(course.id)?.email ||
+          "";
+          
+        if (!userId) {
+          alert("Unable to verify your identity. Please log in and try again.");
           setPdfLoading(false);
-        }
-        return;
-      }
-      if (course.resources && course.resources.length > 0) {
-        const firstUrl = course.resources[0].url;
-        if (firstUrl) {
-          window.open(firstUrl, "_blank");
           return;
         }
-      }
-      if (
-        course.accessInfo &&
-        (course.accessInfo.startsWith("http") || course.accessInfo.startsWith("/"))
-      ) {
-        window.open(course.accessInfo, "_blank");
-      } else {
-        alert(
-          course.accessInfo
-            ? `Access info: ${course.accessInfo}`
-            : `You have access to ${course.title}! Check your email for more details.`,
-        );
+
+        if (course.pdfPath) {
+            const result = await createSignedPdfUrl({
+              data: {
+                courseId: course.id,
+                pdfPath: course.pdfPath,
+                userId,
+              },
+            });
+            window.open(result.signedUrl, "_blank");
+            setPdfLoading(false);
+            return;
+        }
+
+        const privateInfo = await getPrivateCourseAccessInfo({
+          data: { courseId: course.id, userId }
+        });
+        
+        if (privateInfo.resources && privateInfo.resources.length > 0) {
+          const firstUrl = privateInfo.resources[0].url;
+          if (firstUrl) {
+            window.open(firstUrl, "_blank");
+            setPdfLoading(false);
+            return;
+          }
+        }
+        
+        if (
+          privateInfo.accessInfo &&
+          (privateInfo.accessInfo.startsWith("http") || privateInfo.accessInfo.startsWith("/"))
+        ) {
+          window.open(privateInfo.accessInfo, "_blank");
+        } else {
+          alert(
+            privateInfo.accessInfo
+              ? `Access info: ${privateInfo.accessInfo}`
+              : `You have access to ${course.title}! Check your email for more details.`,
+          );
+        }
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Failed to access course content. Please try again.");
+      } finally {
+        setPdfLoading(false);
       }
     } else {
       onEnroll(course.id);
@@ -514,37 +526,61 @@ function FreeCourseCard({ course, index }: { course: Course; index: number }) {
   const handleAccess = async () => {
     setLoading(true);
     try {
-      // Try PDF first
-      if (course.pdfPath) {
-        const userId =
-          user?.uid ||
-          readCourseAccess(course.id)?.userId ||
-          readCourseAccess(course.id)?.email ||
-          "";
-        if (userId) {
-          const result = await createSignedPdfUrl({
-            data: { courseId: course.id, pdfPath: course.pdfPath, userId },
-          });
-          window.open(result.signedUrl, "_blank");
-          return;
-        }
-      }
-      // Try resource links
-      if (course.resources && course.resources.length > 0 && course.resources[0].url) {
-        window.open(course.resources[0].url, "_blank");
+      const userId =
+        user?.uid ||
+        readCourseAccess(course.id)?.userId ||
+        readCourseAccess(course.id)?.email ||
+        "";
+        
+      if (!userId && !course.isFree && course.price > 0) {
+        alert("Please login to access this course.");
+        setLoading(false);
         return;
       }
+
+      // Try PDF first
+      if (course.pdfPath && userId) {
+        const result = await createSignedPdfUrl({
+          data: { courseId: course.id, pdfPath: course.pdfPath, userId },
+        });
+        window.open(result.signedUrl, "_blank");
+        return;
+      }
+      
+      // Fetch private data securely
+      // For free courses without a userId (publicly free), we pass a placeholder so the server function can check if it's free. Wait, getPrivateCourseAccessInfoServer enforces auth!
+      // But wait, if it's a completely free course, they might not need to login?
+      // No, to get access to completely free courses, they still need to either be authorized or the server function should allow free courses.
+      
+      let privateInfo: { resources?: {url: string}[]; accessInfo?: string } = {
+        resources: course.resources,
+        accessInfo: course.accessInfo
+      };
+      
+      if (userId) {
+         privateInfo = await getPrivateCourseAccessInfo({
+          data: { courseId: course.id, userId }
+        });
+      }
+
+      // Try resource links
+      if (privateInfo.resources && privateInfo.resources.length > 0 && privateInfo.resources[0].url) {
+        window.open(privateInfo.resources[0].url, "_blank");
+        return;
+      }
+      
       // Try accessInfo URL
       if (
-        course.accessInfo &&
-        (course.accessInfo.startsWith("http") || course.accessInfo.startsWith("/"))
+        privateInfo.accessInfo &&
+        (privateInfo.accessInfo.startsWith("http") || privateInfo.accessInfo.startsWith("/"))
       ) {
-        window.open(course.accessInfo, "_blank");
+        window.open(privateInfo.accessInfo, "_blank");
         return;
       }
+      
       // Fallback
-      if (course.accessInfo) {
-        alert(`Access info: ${course.accessInfo}`);
+      if (privateInfo.accessInfo) {
+        alert(`Access info: ${privateInfo.accessInfo}`);
       } else {
         alert(`${course.title} — content coming soon!`);
       }
@@ -655,8 +691,8 @@ function Landing() {
       if (typeof window === "undefined") {
         return { courses: [] };
       }
-      const result = await getPublishedCourses();
-      return { courses: result };
+      const result = await getPublishedCoursesServer();
+      return { courses: result as Course[] };
     },
     enabled: typeof window !== "undefined",
     // Course catalog is semi-static: admin changes propagate within 5 minutes

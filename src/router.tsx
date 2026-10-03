@@ -12,8 +12,8 @@ export const getRouter = () => {
         gcTime: 10 * 60 * 1000,
         // Don't refetch just because the user switched tabs/windows
         refetchOnWindowFocus: false,
-        // Don't refetch when the component re-mounts if data is still fresh
-        refetchOnMount: "always",
+        // Don't refetch when the component re-mounts if data is still fresh (respects staleTime)
+        refetchOnMount: true,
         // Retry once on failure, not three times
         retry: 1,
       },

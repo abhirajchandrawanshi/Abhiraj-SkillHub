@@ -141,6 +141,29 @@ async function getCourseByIdServer(courseId: string) {
   }
 }
 
+// Server-side bundle offer fetch using Admin SDK
+async function getBundleOfferByIdServer(bundleId: string) {
+  try {
+    console.log("Fetching bundle offer from Firestore (server):", bundleId);
+    const db = getAdminFirestore();
+    const docRef = db.collection("bundleOffers").doc(bundleId);
+    const snap = await docRef.get();
+
+    if (!snap.exists) {
+      console.error("Bundle offer not found in Firestore:", bundleId);
+      return null;
+    }
+
+    return {
+      id: snap.id,
+      ...snap.data(),
+    } as any;
+  } catch (error) {
+    console.error("Error fetching bundle offer from Firestore (server):", error);
+    throw error;
+  }
+}
+
 async function razorpayFetch(path: string, init: RequestInit) {
   const { keyId, keySecret } = getRazorpayCredentials();
   const response = await fetch(`${RAZORPAY_API}${path}`, {
@@ -198,11 +221,20 @@ export const createRazorpayOrder = createServerFn({ method: "POST" })
       let amountPaise: number = 0;
       let courseTitle: string = "";
       
-      if (data.bundlePrice && data.bundlePrice > 0) {
-        // Bundle offer price override
-        amountPaise = data.bundlePrice * 100;
-        courseTitle = courseIds.length > 1 ? `Bundle (${courseIds.length} courses)` : (courseIds[0] || "Course");
-        console.log("Using bundle price:", amountPaise);
+      if (data.bundleOfferId) {
+        // Fetch bundle price securely from server
+        try {
+          const bundle = await getBundleOfferByIdServer(data.bundleOfferId);
+          if (!bundle || !bundle.price) {
+            throw new Error(`Invalid or missing bundle offer: ${data.bundleOfferId}`);
+          }
+          amountPaise = bundle.price * 100;
+          courseTitle = bundle.title || (courseIds.length > 1 ? `Bundle (${courseIds.length} courses)` : (courseIds[0] || "Course"));
+          console.log("Using secured server bundle price:", amountPaise);
+        } catch (error) {
+          console.error("Error fetching bundle:", error);
+          throw new Error(`Failed to fetch bundle offer. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
       } else {
         // Fetch all courses and sum prices
         try {
@@ -216,7 +248,7 @@ export const createRazorpayOrder = createServerFn({ method: "POST" })
           }
           
           for (const course of courses) {
-            if (!course.price || !course.title) {
+            if (typeof course.price !== 'number' || !course.title) {
               throw new Error(`Course data incomplete for: ${course.id}`);
             }
           }
