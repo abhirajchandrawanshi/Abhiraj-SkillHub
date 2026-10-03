@@ -11,7 +11,6 @@ export default defineConfig({
         entry: "server",
       },
     }),
-    nitro(),
     react(),
     tailwindcss(),
   ],
