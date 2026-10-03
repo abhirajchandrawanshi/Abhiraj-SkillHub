@@ -103,6 +103,8 @@ export function CartDrawer({ open, onClose, onCheckout }: CartDrawerProps) {
                         <img
                           src={course.thumbnail}
                           alt={course.title}
+                          loading="lazy"
+                          decoding="async"
                           className="h-14 w-14 rounded-lg object-contain bg-secondary/60 flex-shrink-0"
                         />
                       )}
@@ -110,9 +112,7 @@ export function CartDrawer({ open, onClose, onCheckout }: CartDrawerProps) {
                         <p className="text-sm font-semibold leading-tight line-clamp-2">
                           {course.title}
                         </p>
-                        <p className="text-sm font-bold text-primary mt-1">
-                          ₹{course.price}
-                        </p>
+                        <p className="text-sm font-bold text-primary mt-1">₹{course.price}</p>
                       </div>
                       <button
                         onClick={() => removeFromCart(course.id)}

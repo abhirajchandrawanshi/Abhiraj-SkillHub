@@ -35,7 +35,12 @@ import { CartDrawer } from "@/components/course/CartDrawer";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { FeedbackCard } from "@/components/ui/feedback-card";
 import { BorderBeamPanel } from "@/components/ui/border-beam-panel";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/features/auth/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useCart, CartProvider } from "@/features/cart/use-cart";
@@ -43,18 +48,26 @@ import { useDynamicCourseAccess } from "@/features/courses/use-dynamic-course-ac
 import type { CourseAccess } from "@/services/access/access";
 import { readCourseAccess } from "@/services/access/access";
 import { useQuery } from "@tanstack/react-query";
-import { getPublishedCourses, submitCourseRating, submitSuggestion } from "@/services/database/firebase-courses";
+import {
+  getPublishedCourses,
+  submitCourseRating,
+  submitSuggestion,
+} from "@/services/database/firebase-courses";
 import type { Course } from "@/services/database/firebase-courses";
 import { createSignedPdfUrl } from "@/services/storage/supabase-server";
 import type { BundleOffer } from "@/lib/bundle-offers";
 
 const SITE_TITLE = "AbhiAcademy";
 
-export const Route = createFileRoute("/")(({
+export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: `${SITE_TITLE} | An investment in a career always pays back.` },
-      { name: "description", content: "Industry-relevant courses, created by experts, to help you build real skills and achieve your goals." },
+      {
+        name: "description",
+        content:
+          "Industry-relevant courses, created by experts, to help you build real skills and achieve your goals.",
+      },
     ],
   }),
   component: () => (
@@ -62,7 +75,7 @@ export const Route = createFileRoute("/")(({
       <Landing />
     </CartProvider>
   ),
-} as any));
+} as any);
 
 // --- Rating persistence helpers ---
 function getRatingKey(courseId: string) {
@@ -114,13 +127,13 @@ function growingRatingCount(target: number, publishedDateStr: string, courseId: 
   }
   const days = Math.max(0, Math.floor((Date.now() - pubDate.getTime()) / 86_400_000));
 
-  const schedule = [0.08, 0.21, 0.36, 0.50, 0.69, 0.85];
+  const schedule = [0.08, 0.21, 0.36, 0.5, 0.69, 0.85];
   let base = 0;
   if (days < schedule.length) {
     base = schedule[days] || 0;
   } else {
     const extraDays = days - (schedule.length - 1);
-    base = 0.85 + (0.15 * (1 - Math.pow(0.8, extraDays)));
+    base = 0.85 + 0.15 * (1 - Math.pow(0.8, extraDays));
   }
 
   const seed = strHash(courseId);
@@ -137,7 +150,7 @@ function fluctuatingRating(base: number, courseId: string): number {
   const seed = strHash(courseId);
   const today = new Date();
   const dayOfYear = Math.floor(
-    (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86_400_000
+    (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86_400_000,
   );
 
   // Deterministically jump forward in intervals of 1, 2, or 3 days
@@ -156,7 +169,7 @@ function fluctuatingRating(base: number, courseId: string): number {
   const randMag = seededRandom(seed + fluctuationStep * 137);
   let magnitude = 0.1;
   if (randMag < 0.25) magnitude = 0.1;
-  else if (randMag < 0.50) magnitude = 0.2;
+  else if (randMag < 0.5) magnitude = 0.2;
   else if (randMag < 0.75) magnitude = 0.3;
   else magnitude = 0.4;
 
@@ -217,7 +230,11 @@ function CourseCard({
       if (course.pdfPath) {
         setPdfLoading(true);
         try {
-          const userId = user?.uid || readCourseAccess(course.id)?.userId || readCourseAccess(course.id)?.email || "";
+          const userId =
+            user?.uid ||
+            readCourseAccess(course.id)?.userId ||
+            readCourseAccess(course.id)?.email ||
+            "";
           if (!userId) {
             alert("Unable to verify your identity. Please log in and try again.");
             return;
@@ -244,10 +261,17 @@ function CourseCard({
           return;
         }
       }
-      if (course.accessInfo && (course.accessInfo.startsWith("http") || course.accessInfo.startsWith("/"))) {
+      if (
+        course.accessInfo &&
+        (course.accessInfo.startsWith("http") || course.accessInfo.startsWith("/"))
+      ) {
         window.open(course.accessInfo, "_blank");
       } else {
-        alert(course.accessInfo ? `Access info: ${course.accessInfo}` : `You have access to ${course.title}! Check your email for more details.`);
+        alert(
+          course.accessInfo
+            ? `Access info: ${course.accessInfo}`
+            : `You have access to ${course.title}! Check your email for more details.`,
+        );
       }
     } else {
       onEnroll(course.id);
@@ -277,13 +301,16 @@ function CourseCard({
   const isFree = course.price === 0 || course.isFree === true;
 
   const formattedRatingCount = !isFree
-    ? (displayedCount >= 1000
-        ? (displayedCount / 1000).toFixed(1) + "K"
-        : displayedCount.toString())
+    ? displayedCount >= 1000
+      ? (displayedCount / 1000).toFixed(1) + "K"
+      : displayedCount.toString()
     : null;
 
   const publishedDate = course.publishedDate
-    ? new Date(course.publishedDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+    ? new Date(course.publishedDate).toLocaleDateString("en-US", {
+        month: "short",
+        year: "numeric",
+      })
     : "Aug 2024";
 
   return (
@@ -299,6 +326,8 @@ function CourseCard({
           <img
             src={course.thumbnail}
             alt={course.title}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-contain min-h-[200px] sm:min-h-[220px]"
           />
         ) : (
@@ -310,9 +339,6 @@ function CourseCard({
 
       {/* ── RIGHT: Details ── */}
       <div className="flex flex-1 flex-col p-5 sm:p-6 gap-2.5">
-
-
-
         {/* ── Row 2: Title (left) + Published Date (right) ── */}
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-display text-xl sm:text-2xl font-bold leading-snug text-foreground whitespace-pre-line">
@@ -333,7 +359,9 @@ function CourseCard({
         {/* ── Row 4: Description ── */}
         {course.description && (
           <div className="flex flex-col items-start">
-            <p className={`text-base text-muted-foreground leading-relaxed ${isExpanded ? "" : "line-clamp-2"}`}>
+            <p
+              className={`text-base text-muted-foreground leading-relaxed ${isExpanded ? "" : "line-clamp-2"}`}
+            >
               {course.description}
             </p>
             {course.description.length > 100 && (
@@ -356,7 +384,9 @@ function CourseCard({
             <Star className="h-4 w-4 fill-amber-500" />
             <span>{rating.toFixed(1)}</span>
             {formattedRatingCount && (
-              <span className="text-muted-foreground font-normal text-xs">({formattedRatingCount} reviews)</span>
+              <span className="text-muted-foreground font-normal text-xs">
+                ({formattedRatingCount} reviews)
+              </span>
             )}
           </div>
         </div>
@@ -368,7 +398,9 @@ function CourseCard({
           {/* Price */}
           <div className="flex items-baseline gap-2">
             {course.originalPrice && course.originalPrice > course.price && (
-              <span className="text-sm text-muted-foreground line-through">₹{course.originalPrice}</span>
+              <span className="text-sm text-muted-foreground line-through">
+                ₹{course.originalPrice}
+              </span>
             )}
             <span className="font-display text-2xl font-bold text-foreground">₹{course.price}</span>
             {course.originalPrice && course.originalPrice > course.price && (
@@ -400,14 +432,10 @@ function CourseCard({
                   disabled={accessLoading}
                   className="transition-transform hover:scale-105 active:scale-95 shadow-sm"
                 >
-                  {accessLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Buy Now"
-                  )}
+                  {accessLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buy Now"}
                 </SpinningBorderButton>
                 <Button
-                  onClick={() => inCart ? removeFromCart(course.id) : addToCart(course)}
+                  onClick={() => (inCart ? removeFromCart(course.id) : addToCart(course))}
                   variant={inCart ? "secondary" : "outline"}
                   size="sm"
                   className="px-3 rounded-lg transition-all hover:scale-105 active:scale-95 shadow-sm"
@@ -430,18 +458,24 @@ function CourseCard({
             {(!hasRated || !ratingFaded) && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
+                animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.5 }}
                 className="flex flex-col sm:flex-row sm:items-center gap-2 bg-secondary/50 p-3 rounded-lg border border-border"
               >
                 {hasRated ? (
-                  <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
+                  <motion.div
+                    initial={{ scale: 0.9 }}
+                    animate={{ scale: 1 }}
+                    className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-1"
+                  >
                     ✓ Thanks for your rating! (You rated {userRating}★)
                   </motion.div>
                 ) : (
                   <>
-                    <span className="text-xs font-semibold text-muted-foreground">Rate this course:</span>
+                    <span className="text-xs font-semibold text-muted-foreground">
+                      Rate this course:
+                    </span>
                     <div className="flex items-center gap-1">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <button
@@ -452,10 +486,11 @@ function CourseCard({
                           className="focus:outline-none transition-transform hover:scale-110"
                         >
                           <Star
-                            className={`h-5 w-5 ${star <= (hoverRating || userRating)
-                              ? "fill-amber-500 text-amber-500"
-                              : "text-muted-foreground/40"
-                              }`}
+                            className={`h-5 w-5 ${
+                              star <= (hoverRating || userRating)
+                                ? "fill-amber-500 text-amber-500"
+                                : "text-muted-foreground/40"
+                            }`}
                           />
                         </button>
                       ))}
@@ -467,19 +502,12 @@ function CourseCard({
           </AnimatePresence>
         )}
       </div>
-
     </motion.div>
   );
 }
 
 // --- FreeCourseCard (Flipkart-style compact grid card) ---
-function FreeCourseCard({
-  course,
-  index,
-}: {
-  course: Course;
-  index: number;
-}) {
+function FreeCourseCard({ course, index }: { course: Course; index: number }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
 
@@ -488,7 +516,11 @@ function FreeCourseCard({
     try {
       // Try PDF first
       if (course.pdfPath) {
-        const userId = user?.uid || readCourseAccess(course.id)?.userId || readCourseAccess(course.id)?.email || "";
+        const userId =
+          user?.uid ||
+          readCourseAccess(course.id)?.userId ||
+          readCourseAccess(course.id)?.email ||
+          "";
         if (userId) {
           const result = await createSignedPdfUrl({
             data: { courseId: course.id, pdfPath: course.pdfPath, userId },
@@ -503,7 +535,10 @@ function FreeCourseCard({
         return;
       }
       // Try accessInfo URL
-      if (course.accessInfo && (course.accessInfo.startsWith("http") || course.accessInfo.startsWith("/"))) {
+      if (
+        course.accessInfo &&
+        (course.accessInfo.startsWith("http") || course.accessInfo.startsWith("/"))
+      ) {
         window.open(course.accessInfo, "_blank");
         return;
       }
@@ -533,6 +568,8 @@ function FreeCourseCard({
           <img
             src={course.thumbnail}
             alt={course.title}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-contain"
           />
         ) : (
@@ -564,18 +601,12 @@ function FreeCourseCard({
           size="sm"
           className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-6 transition-transform hover:scale-105 active:scale-95 shadow-sm w-full max-w-[200px] cursor-pointer"
         >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            "Access Course"
-          )}
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Access Course"}
         </Button>
       </div>
     </motion.div>
   );
 }
-
-
 
 function Landing() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -606,14 +637,14 @@ function Landing() {
     setSearchQuery(val);
     if (val.trim()) {
       // auto-scroll into courses when user starts searching
-      document.getElementById('courses')?.scrollIntoView({ behavior: 'smooth' });
+      document.getElementById("courses")?.scrollIntoView({ behavior: "smooth" });
     }
   };
 
   const clearSearch = () => setSearchQuery("");
 
   // Tab state: 'free' | 'exclusive'
-  const [activeTab, setActiveTab] = useState<'free' | 'exclusive'>('exclusive');
+  const [activeTab, setActiveTab] = useState<"free" | "exclusive">("exclusive");
 
   // Sort state
   const [sortType, setSortType] = useState<"latest" | "popular">("latest");
@@ -621,13 +652,16 @@ function Landing() {
   const { data: coursesData, isLoading: coursesLoading } = useQuery({
     queryKey: ["published-courses"],
     queryFn: async () => {
-      if (typeof window === 'undefined') {
+      if (typeof window === "undefined") {
         return { courses: [] };
       }
       const result = await getPublishedCourses();
       return { courses: result };
     },
-    enabled: typeof window !== 'undefined',
+    enabled: typeof window !== "undefined",
+    // Course catalog is semi-static: admin changes propagate within 5 minutes
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 
   // Sort courses
@@ -638,8 +672,16 @@ function Landing() {
       if (countA !== countB) return countB - countA;
     }
 
-    const dateA = a.publishedDate || (typeof a.createdAt === 'string' ? a.createdAt : a.createdAt?.toDate?.().toISOString?.() ?? "");
-    const dateB = b.publishedDate || (typeof b.createdAt === 'string' ? b.createdAt : b.createdAt?.toDate?.().toISOString?.() ?? "");
+    const dateA =
+      a.publishedDate ||
+      (typeof a.createdAt === "string"
+        ? a.createdAt
+        : (a.createdAt?.toDate?.().toISOString?.() ?? ""));
+    const dateB =
+      b.publishedDate ||
+      (typeof b.createdAt === "string"
+        ? b.createdAt
+        : (b.createdAt?.toDate?.().toISOString?.() ?? ""));
     return dateB.localeCompare(dateA);
   });
 
@@ -670,23 +712,24 @@ function Landing() {
   const filteredCourses = applySearch(dynamicCourses);
 
   // Track which nav section is active
-  const [activeSection, setActiveSection] = useState<'home' | 'courses' | 'about'>('home');
+  const [activeSection, setActiveSection] = useState<"home" | "courses" | "about">("home");
   useEffect(() => {
     const onScroll = () => {
-      const about = document.getElementById('about');
-      const courses = document.getElementById('courses');
-      const home = document.getElementById('home');
+      const about = document.getElementById("about");
+      const courses = document.getElementById("courses");
+      const home = document.getElementById("home");
       // Use getBoundingClientRect for accurate position regardless of layout
       const aboutTop = about ? about.getBoundingClientRect().top : Infinity;
       const coursesTop = courses ? courses.getBoundingClientRect().top : Infinity;
-      const isAtBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 20;
+      const isAtBottom =
+        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 20;
 
-      if (isAtBottom || aboutTop <= window.innerHeight - 150) setActiveSection('about');
-      else if (coursesTop <= 200) setActiveSection('courses');
-      else setActiveSection('home');
+      if (isAtBottom || aboutTop <= window.innerHeight - 150) setActiveSection("about");
+      else if (coursesTop <= 200) setActiveSection("courses");
+      else setActiveSection("home");
     };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   const scrollTo = (id: string) => {
@@ -729,34 +772,46 @@ function Landing() {
   };
 
   // Checkout dialog props
-  const singleCourse = dynamicCourses.find(c => c.id === checkoutCourseId);
+  const singleCourse = dynamicCourses.find((c) => c.id === checkoutCourseId);
 
   return (
     <KineticGrid isDark={isDark}>
-      <header className="sticky top-0 z-50 py-4 border-b border-border/20 backdrop-blur-md" style={{ background: isDark ? 'rgba(22,22,24,0.80)' : 'rgba(248,249,251,0.80)' }}>
+      <header
+        className="sticky top-0 z-50 py-4 border-b border-border/20 backdrop-blur-md"
+        style={{ background: isDark ? "rgba(22,22,24,0.80)" : "rgba(248,249,251,0.80)" }}
+      >
         <div className="mx-auto flex max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-10">
-            <span className="font-display text-2xl font-bold tracking-tight">
-              AbhiAcademy
-            </span>
+            <span className="font-display text-2xl font-bold tracking-tight">AbhiAcademy</span>
             <nav className="hidden items-center gap-8 text-sm font-medium md:flex">
               <button
                 onClick={() => scrollTo("home")}
-                className={`cursor-pointer ${activeSection === 'home' ? "border-b-2 border-foreground pb-1 text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}`}
-              >Home</button>
+                className={`cursor-pointer ${activeSection === "home" ? "border-b-2 border-foreground pb-1 text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Home
+              </button>
               <button
                 onClick={() => scrollTo("courses")}
-                className={`cursor-pointer ${activeSection === 'courses' ? "border-b-2 border-foreground pb-1 text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}`}
-              >Courses</button>
+                className={`cursor-pointer ${activeSection === "courses" ? "border-b-2 border-foreground pb-1 text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Courses
+              </button>
               <button
                 onClick={() => scrollTo("about")}
-                className={`cursor-pointer ${activeSection === 'about' ? "border-b-2 border-foreground pb-1 text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}`}
-              >About</button>
+                className={`cursor-pointer ${activeSection === "about" ? "border-b-2 border-foreground pb-1 text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                About
+              </button>
             </nav>
           </div>
 
           <div className="hidden md:flex items-center gap-6">
-            <BorderBeam size="md" colorVariant="colorful" theme={isDark ? "dark" : "light"} className="rounded-full">
+            <BorderBeam
+              size="md"
+              colorVariant="colorful"
+              theme={isDark ? "dark" : "light"}
+              className="rounded-full"
+            >
               <div className="relative rounded-full overflow-hidden bg-secondary border border-border/20 group">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
                 <input
@@ -764,7 +819,7 @@ function Landing() {
                   placeholder="Search courses..."
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Escape' && clearSearch()}
+                  onKeyDown={(e) => e.key === "Escape" && clearSearch()}
                   className="h-10 w-64 bg-transparent pl-10 pr-8 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none transition-all relative z-10"
                 />
                 {searchQuery && (
@@ -796,15 +851,24 @@ function Landing() {
             <ThemeToggle />
             {user ? (
               <div className="flex items-center gap-3">
-                <button onClick={() => void navigate({ to: "/" })} className="h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold hover:opacity-90">
+                <button
+                  onClick={() => void navigate({ to: "/" })}
+                  className="h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold hover:opacity-90"
+                >
                   {user.email ? user.email.charAt(0).toUpperCase() : "AC"}
                 </button>
-                <button onClick={() => void signOutUser()} className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-1">
+                <button
+                  onClick={() => void signOutUser()}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-1"
+                >
                   <LogOut className="h-4 w-4" />
                 </button>
               </div>
             ) : (
-              <button onClick={() => void navigate({ to: "/login" })} className="h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold hover:opacity-90">
+              <button
+                onClick={() => void navigate({ to: "/login" })}
+                className="h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold hover:opacity-90"
+              >
                 <LockKeyhole className="h-4 w-4" />
               </button>
             )}
@@ -829,7 +893,7 @@ function Landing() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             className="md:hidden sticky top-[73px] z-40 border-b border-border/20 backdrop-blur-xl"
-            style={{ background: isDark ? 'rgba(22,22,24,0.95)' : 'rgba(248,249,251,0.95)' }}
+            style={{ background: isDark ? "rgba(22,22,24,0.95)" : "rgba(248,249,251,0.95)" }}
           >
             <div className="flex flex-col p-6 gap-6">
               {/* Mobile Search */}
@@ -840,7 +904,7 @@ function Landing() {
                   placeholder="Search courses..."
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Escape' && clearSearch()}
+                  onKeyDown={(e) => e.key === "Escape" && clearSearch()}
                   className="h-12 w-full rounded-xl bg-secondary pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-all"
                 />
                 {searchQuery && (
@@ -855,9 +919,24 @@ function Landing() {
 
               {/* Mobile Nav Links */}
               <nav className="flex flex-col gap-4 text-base font-semibold">
-                <button onClick={() => scrollTo("home")} className={`text-left px-2 py-1 ${activeSection === 'home' ? 'text-foreground' : 'text-muted-foreground'}`}>Home</button>
-                <button onClick={() => scrollTo("courses")} className={`text-left px-2 py-1 ${activeSection === 'courses' ? 'text-foreground' : 'text-muted-foreground'}`}>Courses</button>
-                <button onClick={() => scrollTo("about")} className={`text-left px-2 py-1 ${activeSection === 'about' ? 'text-foreground' : 'text-muted-foreground'}`}>About</button>
+                <button
+                  onClick={() => scrollTo("home")}
+                  className={`text-left px-2 py-1 ${activeSection === "home" ? "text-foreground" : "text-muted-foreground"}`}
+                >
+                  Home
+                </button>
+                <button
+                  onClick={() => scrollTo("courses")}
+                  className={`text-left px-2 py-1 ${activeSection === "courses" ? "text-foreground" : "text-muted-foreground"}`}
+                >
+                  Courses
+                </button>
+                <button
+                  onClick={() => scrollTo("about")}
+                  className={`text-left px-2 py-1 ${activeSection === "about" ? "text-foreground" : "text-muted-foreground"}`}
+                >
+                  About
+                </button>
               </nav>
 
               <div className="h-px bg-border/50 w-full" />
@@ -868,7 +947,10 @@ function Landing() {
                 <div className="flex items-center gap-4">
                   <button
                     className="text-foreground relative p-2"
-                    onClick={() => { setCartDrawerOpen(true); setMenuOpen(false); }}
+                    onClick={() => {
+                      setCartDrawerOpen(true);
+                      setMenuOpen(false);
+                    }}
                   >
                     <ShoppingCart className="h-6 w-6" />
                     {cartCount > 0 && (
@@ -879,11 +961,23 @@ function Landing() {
                   </button>
 
                   {user ? (
-                    <button onClick={() => { void signOutUser(); setMenuOpen(false); }} className="text-muted-foreground hover:text-foreground flex items-center gap-2 font-medium">
+                    <button
+                      onClick={() => {
+                        void signOutUser();
+                        setMenuOpen(false);
+                      }}
+                      className="text-muted-foreground hover:text-foreground flex items-center gap-2 font-medium"
+                    >
                       <LogOut className="h-5 w-5" /> Logout
                     </button>
                   ) : (
-                    <button onClick={() => { void navigate({ to: "/login" }); setMenuOpen(false); }} className="text-muted-foreground hover:text-foreground flex items-center gap-2 font-medium">
+                    <button
+                      onClick={() => {
+                        void navigate({ to: "/login" });
+                        setMenuOpen(false);
+                      }}
+                      className="text-muted-foreground hover:text-foreground flex items-center gap-2 font-medium"
+                    >
                       <LockKeyhole className="h-5 w-5" /> Login
                     </button>
                   )}
@@ -906,13 +1000,21 @@ function Landing() {
                 transition={{ duration: 0.6, ease: "easeOut" }}
                 className="max-w-4xl relative"
               >
-                <p className="mb-6 text-sm font-bold tracking-[0.2em] uppercase" style={{ color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(30,30,60,0.45)' }}>
+                <p
+                  className="mb-6 text-sm font-bold tracking-[0.2em] uppercase"
+                  style={{ color: isDark ? "rgba(255,255,255,0.45)" : "rgba(30,30,60,0.45)" }}
+                >
                   Learn. Build. Grow.
                 </p>
                 <div className="relative">
-                  <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold leading-[1.1] tracking-tight" style={{ color: isDark ? '#fff' : '#0f0f1a' }}>
+                  <h1
+                    className="font-display text-5xl md:text-7xl lg:text-8xl font-bold leading-[1.1] tracking-tight"
+                    style={{ color: isDark ? "#fff" : "#0f0f1a" }}
+                  >
                     An investment in a career <br className="hidden md:block" />
-                    <span className="bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 bg-clip-text text-transparent">always pays back.</span>
+                    <span className="bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 bg-clip-text text-transparent">
+                      always pays back.
+                    </span>
                   </h1>
                 </div>
               </motion.div>
@@ -923,7 +1025,6 @@ function Landing() {
         {/* Dynamic Courses Section */}
         <section id="courses" className="pb-24 pt-6">
           <div className="mx-auto max-w-[1400px] px-6">
-
             {/* ── Tab Buttons + Controls Row ── */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -934,35 +1035,43 @@ function Landing() {
               {/* Tab Switcher */}
               <div className="flex items-center gap-1 p-1 rounded-xl bg-secondary/60 border border-border/40 w-fit">
                 <button
-                  onClick={() => setActiveTab('exclusive')}
+                  onClick={() => setActiveTab("exclusive")}
                   className={`cursor-pointer relative px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                    activeTab === 'exclusive'
-                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/30'
-                      : 'text-muted-foreground hover:text-foreground'
+                    activeTab === "exclusive"
+                      ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/30"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   ⭐ Exclusive Courses
                   {exclusiveCourses.length > 0 && (
-                    <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                      activeTab === 'exclusive' ? 'bg-white/20 text-white' : 'bg-amber-500/15 text-amber-600'
-                    }`}>
+                    <span
+                      className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                        activeTab === "exclusive"
+                          ? "bg-white/20 text-white"
+                          : "bg-amber-500/15 text-amber-600"
+                      }`}
+                    >
                       {exclusiveCourses.length}
                     </span>
                   )}
                 </button>
                 <button
-                  onClick={() => setActiveTab('free')}
+                  onClick={() => setActiveTab("free")}
                   className={`cursor-pointer relative px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                    activeTab === 'free'
-                      ? 'bg-green-500 text-white shadow-md shadow-green-500/30'
-                      : 'text-muted-foreground hover:text-foreground'
+                    activeTab === "free"
+                      ? "bg-green-500 text-white shadow-md shadow-green-500/30"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   🎁 Free Courses
                   {freeCourses.length > 0 && (
-                    <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                      activeTab === 'free' ? 'bg-white/20 text-white' : 'bg-green-500/15 text-green-600'
-                    }`}>
+                    <span
+                      className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                        activeTab === "free"
+                          ? "bg-white/20 text-white"
+                          : "bg-green-500/15 text-green-600"
+                      }`}
+                    >
                       {freeCourses.length}
                     </span>
                   )}
@@ -1018,7 +1127,7 @@ function Landing() {
                 className="mb-4 text-sm text-muted-foreground"
               >
                 {filteredCourses.length > 0
-                  ? `${filteredCourses.length} result${filteredCourses.length === 1 ? '' : 's'} for "${searchQuery}"`
+                  ? `${filteredCourses.length} result${filteredCourses.length === 1 ? "" : "s"} for "${searchQuery}"`
                   : `No results for "${searchQuery}"`}
               </motion.p>
             )}
@@ -1030,7 +1139,7 @@ function Landing() {
               </div>
             ) : (
               <AnimatePresence mode="wait">
-                {activeTab === 'free' ? (
+                {activeTab === "free" ? (
                   <motion.div
                     key="free"
                     initial={{ opacity: 0, y: 10 }}
@@ -1042,7 +1151,9 @@ function Landing() {
                     <div className="flex items-center gap-3 mb-6">
                       <div className="h-8 w-1 rounded-full bg-green-500" />
                       <div>
-                        <h2 className="font-display text-xl font-bold text-foreground">Free Courses</h2>
+                        <h2 className="font-display text-xl font-bold text-foreground">
+                          Free Courses
+                        </h2>
                       </div>
                     </div>
                     {filteredFree.length > 0 ? (
@@ -1054,14 +1165,23 @@ function Landing() {
                     ) : searchQuery.trim() ? (
                       <div className="text-center py-16">
                         <Search className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                        <p className="text-muted-foreground font-medium">No free courses match &ldquo;{searchQuery}&rdquo;</p>
-                        <button onClick={clearSearch} className="mt-4 text-sm text-primary hover:underline">Clear search</button>
+                        <p className="text-muted-foreground font-medium">
+                          No free courses match &ldquo;{searchQuery}&rdquo;
+                        </p>
+                        <button
+                          onClick={clearSearch}
+                          className="mt-4 text-sm text-primary hover:underline"
+                        >
+                          Clear search
+                        </button>
                       </div>
                     ) : (
                       <div className="text-center py-16 rounded-2xl border border-dashed border-green-500/30 bg-green-500/5">
                         <span className="text-4xl mb-3 block">🎁</span>
                         <p className="text-muted-foreground font-medium">No free courses yet</p>
-                        <p className="text-sm text-muted-foreground mt-1">Check back soon — free content is coming!</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Check back soon — free content is coming!
+                        </p>
                       </div>
                     )}
                   </motion.div>
@@ -1077,27 +1197,47 @@ function Landing() {
                     <div className="flex items-center gap-3 mb-6">
                       <div className="h-8 w-1 rounded-full bg-gradient-to-b from-amber-400 to-orange-500" />
                       <div>
-                        <h2 className="font-display text-xl font-bold text-foreground">Exclusive Courses</h2>
-                        <p className="text-xs text-muted-foreground">Premium content crafted by industry experts</p>
+                        <h2 className="font-display text-xl font-bold text-foreground">
+                          Exclusive Courses
+                        </h2>
+                        <p className="text-xs text-muted-foreground">
+                          Premium content crafted by industry experts
+                        </p>
                       </div>
                     </div>
                     {filteredExclusive.length > 0 ? (
                       <div className="flex flex-col gap-6">
                         {filteredExclusive.map((course, index) => (
-                          <CourseCard key={course.id} course={course} onEnroll={handleDynamicCourseAccess} index={index} />
+                          <CourseCard
+                            key={course.id}
+                            course={course}
+                            onEnroll={handleDynamicCourseAccess}
+                            index={index}
+                          />
                         ))}
                       </div>
                     ) : searchQuery.trim() ? (
                       <div className="text-center py-16">
                         <Search className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                        <p className="text-muted-foreground font-medium">No exclusive courses match &ldquo;{searchQuery}&rdquo;</p>
-                        <button onClick={clearSearch} className="mt-4 text-sm text-primary hover:underline">Clear search</button>
+                        <p className="text-muted-foreground font-medium">
+                          No exclusive courses match &ldquo;{searchQuery}&rdquo;
+                        </p>
+                        <button
+                          onClick={clearSearch}
+                          className="mt-4 text-sm text-primary hover:underline"
+                        >
+                          Clear search
+                        </button>
                       </div>
                     ) : (
                       <div className="text-center py-16 rounded-2xl border border-dashed border-amber-500/30 bg-amber-500/5">
                         <span className="text-4xl mb-3 block">⭐</span>
-                        <p className="text-muted-foreground font-medium">No exclusive courses yet</p>
-                        <p className="text-sm text-muted-foreground mt-1">Premium courses are being added soon!</p>
+                        <p className="text-muted-foreground font-medium">
+                          No exclusive courses yet
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Premium courses are being added soon!
+                        </p>
                       </div>
                     )}
                   </motion.div>
@@ -1117,27 +1257,31 @@ function Landing() {
           <p className="text-base font-semibold text-foreground mb-8">
             Your ideas shape what we build next. Got a suggestion? Let us know!
           </p>
-          <FeedbackCard onSubmit={async (name, feedback) => {
-            try {
-              await submitSuggestion(name, feedback);
-              toast.success("Thank you for your feedback!");
-            } catch (err) {
-              console.error("Feedback error:", err);
-              // Fallback to still show success for local testing / unauthenticated users
-              toast.success("Thank you for your feedback!");
-            }
-          }} />
+          <FeedbackCard
+            onSubmit={async (name, feedback) => {
+              try {
+                await submitSuggestion(name, feedback);
+                toast.success("Thank you for your feedback!");
+              } catch (err) {
+                console.error("Feedback error:", err);
+                // Fallback to still show success for local testing / unauthenticated users
+                toast.success("Thank you for your feedback!");
+              }
+            }}
+          />
         </div>
       </section>
 
       <footer id="about" className="border-t border-border/30 pt-16 pb-14">
         <div className="mx-auto max-w-[1400px] px-6">
-
           {/* ── About blurb ── */}
           <div className="text-center mb-10">
-            <span className="font-display text-3xl font-bold tracking-tight text-foreground">AbhiAcademy</span>
+            <span className="font-display text-3xl font-bold tracking-tight text-foreground">
+              AbhiAcademy
+            </span>
             <p className="mt-3 text-base font-medium text-foreground leading-relaxed max-w-md mx-auto">
-              Built by <span className="font-bold text-primary">Abhiraj Chandrawanshi</span> — a developer &amp; educator making practical skills accessible to everyone.
+              Built by <span className="font-bold text-primary">Abhiraj Chandrawanshi</span> — a
+              developer &amp; educator making practical skills accessible to everyone.
             </p>
           </div>
 
@@ -1145,13 +1289,14 @@ function Landing() {
           <div className="text-center mb-6">
             <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">
               Find me{" "}
-              <span className="bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 bg-clip-text text-transparent">on</span>
+              <span className="bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 bg-clip-text text-transparent">
+                on
+              </span>
             </h2>
           </div>
 
           {/* ── Social buttons — centered row with GradientButton ── */}
           <div className="flex flex-wrap items-center justify-center gap-4 mb-12">
-
             {/* Instagram */}
             <GradientButton asChild>
               <a
@@ -1207,12 +1352,12 @@ function Landing() {
 
           {/* ── Bottom bar ── */}
           <div className="border-t border-border/30 pt-6 text-center">
-            <span className="text-sm font-semibold text-foreground">© 2026 AbhiAcademy by Abhiraj Chandrawanshi. All rights reserved.</span>
+            <span className="text-sm font-semibold text-foreground">
+              © 2026 AbhiAcademy by Abhiraj Chandrawanshi. All rights reserved.
+            </span>
           </div>
-
         </div>
       </footer>
-
 
       {/* Cart Drawer */}
       <CartDrawer
@@ -1228,11 +1373,11 @@ function Landing() {
           onOpenChange={setCheckoutOpen}
           // Single-course mode props
           accessInfo={!isCartCheckout ? (singleCourse?.details ?? "") : undefined}
-          pdfPath={!isCartCheckout ? (singleCourse?.pdfPath || "") : undefined}
+          pdfPath={!isCartCheckout ? singleCourse?.pdfPath || "" : undefined}
           price={!isCartCheckout ? (singleCourse ? singleCourse.price : 0) : undefined}
           title={!isCartCheckout ? (singleCourse ? singleCourse.title : "") : undefined}
           courseId={!isCartCheckout ? checkoutCourseId : undefined}
-          resources={!isCartCheckout ? (singleCourse?.resources) : undefined}
+          resources={!isCartCheckout ? singleCourse?.resources : undefined}
           // Cart (multi-course) mode props
           courses={isCartCheckout ? cartCheckoutCourses : undefined}
           matchedOffer={isCartCheckout ? cartCheckoutOffer : undefined}

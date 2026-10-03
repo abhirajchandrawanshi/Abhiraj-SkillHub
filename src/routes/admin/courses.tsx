@@ -63,9 +63,7 @@ function AdminCourses() {
   const { isAdmin, adminUser } = useAdminAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<
-    "all" | "published" | "draft"
-  >("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("all");
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [addCourseType, setAddCourseType] = useState<"free" | "exclusive">("exclusive");
@@ -81,17 +79,20 @@ function AdminCourses() {
     queryKey: ["admin-courses"],
     queryFn: async () => {
       if (!isAdmin || !adminUser) throw new Error("Not authenticated as admin");
-      if (typeof window === 'undefined') throw new Error("Cannot fetch on server");
-      
+      if (typeof window === "undefined") throw new Error("Cannot fetch on server");
+
       return getCoursesClient();
     },
-    enabled: isAdmin && !!adminUser && typeof window !== 'undefined',
+    enabled: isAdmin && !!adminUser && typeof window !== "undefined",
+    // Admin sees recent changes but doesn't need to hammer Firestore
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (courseId: string) => {
       if (!isAdmin || !adminUser) throw new Error("Not authenticated as admin");
-      
+
       await deleteCourseClient(courseId);
     },
     onSuccess: () => {
@@ -104,15 +105,9 @@ function AdminCourses() {
   });
 
   const toggleStatusMutation = useMutation({
-    mutationFn: async ({
-      id,
-      status,
-    }: {
-      id: string;
-      status: "published" | "draft";
-    }) => {
+    mutationFn: async ({ id, status }: { id: string; status: "published" | "draft" }) => {
       if (!isAdmin || !adminUser) throw new Error("Not authenticated as admin");
-      
+
       await toggleCourseStatusClient(id, status);
     },
     onSuccess: () => {
@@ -129,8 +124,7 @@ function AdminCourses() {
       course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       course.instructor?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesStatus =
-      statusFilter === "all" || course.status === statusFilter;
+    const matchesStatus = statusFilter === "all" || course.status === statusFilter;
 
     const isFree = (course as any).isFree === true || course.price === 0;
     const matchesType =
@@ -174,9 +168,7 @@ function AdminCourses() {
       return (
         <Card className="border-destructive">
           <CardContent className="pt-6">
-            <p className="text-destructive">
-              Failed to load courses. Please try again.
-            </p>
+            <p className="text-destructive">Failed to load courses. Please try again.</p>
           </CardContent>
         </Card>
       );
@@ -187,21 +179,25 @@ function AdminCourses() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Courses</h2>
-            <p className="text-muted-foreground">
-              Manage your course catalog
-            </p>
+            <p className="text-muted-foreground">Manage your course catalog</p>
           </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
-              onClick={() => { setAddCourseType("free"); setShowAddDialog(true); }}
+              onClick={() => {
+                setAddCourseType("free");
+                setShowAddDialog(true);
+              }}
               className="border-green-500/50 text-green-600 hover:bg-green-500/10 hover:border-green-500"
             >
               <Gift className="h-4 w-4 mr-2" />
               Add Free Course
             </Button>
             <Button
-              onClick={() => { setAddCourseType("exclusive"); setShowAddDialog(true); }}
+              onClick={() => {
+                setAddCourseType("exclusive");
+                setShowAddDialog(true);
+              }}
               className="bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600"
             >
               <Star className="h-4 w-4 mr-2 fill-white" />
@@ -226,7 +222,9 @@ function AdminCourses() {
                 <Filter className="h-4 w-4 text-muted-foreground" />
                 <select
                   value={courseTypeFilter}
-                  onChange={(e) => setCourseTypeFilter(e.target.value as "all" | "free" | "exclusive")}
+                  onChange={(e) =>
+                    setCourseTypeFilter(e.target.value as "all" | "free" | "exclusive")
+                  }
                   className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="all">All Types</option>
@@ -235,11 +233,7 @@ function AdminCourses() {
                 </select>
                 <select
                   value={statusFilter}
-                  onChange={(e) =>
-                    setStatusFilter(
-                      e.target.value as "all" | "published" | "draft",
-                    )
-                  }
+                  onChange={(e) => setStatusFilter(e.target.value as "all" | "published" | "draft")}
                   className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="all">All Status</option>
@@ -280,6 +274,8 @@ function AdminCourses() {
                               <img
                                 src={course.thumbnail}
                                 alt={course.title}
+                                loading="lazy"
+                                decoding="async"
                                 className="h-12 w-12 rounded-md object-contain bg-secondary/60"
                               />
                             )}
@@ -307,33 +303,24 @@ function AdminCourses() {
 
                         <TableCell>
                           <div className="font-medium">₹{course.price}</div>
-                          {course.originalPrice &&
-                            course.originalPrice > course.price && (
-                              <div className="text-sm text-muted-foreground line-through">
-                                ₹{course.originalPrice}
-                              </div>
-                            )}
+                          {course.originalPrice && course.originalPrice > course.price && (
+                            <div className="text-sm text-muted-foreground line-through">
+                              ₹{course.originalPrice}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant={
-                              course.status === "published"
-                                ? "default"
-                                : "secondary"
-                            }
-                          >
-                            {course.status === "published"
-                              ? "Published"
-                              : "Draft"}
+                          <Badge variant={course.status === "published" ? "default" : "secondary"}>
+                            {course.status === "published" ? "Published" : "Draft"}
                           </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="text-sm text-muted-foreground">
                             {course.createdAt
                               ? new Date(
-                                  typeof course.createdAt === 'string' 
-                                    ? course.createdAt 
-                                    : course.createdAt.toDate?.() || course.createdAt
+                                  typeof course.createdAt === "string"
+                                    ? course.createdAt
+                                    : course.createdAt.toDate?.() || course.createdAt,
                                 ).toLocaleDateString()
                               : "—"}
                           </div>
@@ -346,15 +333,11 @@ function AdminCourses() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => handleEdit(course)}
-                              >
+                              <DropdownMenuItem onClick={() => handleEdit(course)}>
                                 <Edit className="h-4 w-4 mr-2" />
                                 Edit
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleToggleStatus(course)}
-                              >
+                              <DropdownMenuItem onClick={() => handleToggleStatus(course)}>
                                 {course.status === "published" ? (
                                   <>
                                     <EyeOff className="h-4 w-4 mr-2" />
@@ -424,8 +407,8 @@ function AdminCourses() {
             <AlertDialogHeader>
               <AlertDialogTitle>Are you sure?</AlertDialogTitle>
               <AlertDialogDescription>
-                This action cannot be undone. This will permanently delete the
-                course from the database.
+                This action cannot be undone. This will permanently delete the course from the
+                database.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

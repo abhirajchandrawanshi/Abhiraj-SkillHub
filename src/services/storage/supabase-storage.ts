@@ -28,12 +28,12 @@ function getSupabase() {
 export async function uploadToSupabase(
   file: File,
   bucket = "course-thumbnails",
-  folder = ""
+  folder = "",
 ): Promise<string> {
   const client = getSupabase();
   if (!client) {
     throw new Error(
-      "Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file."
+      "Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.",
     );
   }
 
@@ -43,12 +43,11 @@ export async function uploadToSupabase(
     ? `${folder}/${Date.now()}-${sanitizedName}`
     : `${Date.now()}-${sanitizedName}`;
 
-  const { data, error } = await client.storage
-    .from(bucket)
-    .upload(filePath, file, {
-      cacheControl: "3600",
-      upsert: false,
-    });
+  const { data, error } = await client.storage.from(bucket).upload(filePath, file, {
+    // 1 year — thumbnails are content-addressed (timestamp in name), effectively immutable
+    cacheControl: "31536000",
+    upsert: false,
+  });
 
   if (error) {
     console.error("Supabase upload error:", error);

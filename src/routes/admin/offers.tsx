@@ -1,15 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import {
-  Plus,
-  Edit,
-  Trash2,
-  Tag,
-  Loader2,
-  X,
-  Check,
-} from "lucide-react";
+import { Plus, Edit, Trash2, Tag, Loader2, X, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,9 +65,7 @@ function OfferFormDialog({
   const [error, setError] = useState("");
 
   const toggleCourse = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
   const individualTotal = selectedIds.reduce((sum, id) => {
@@ -87,10 +77,19 @@ function OfferFormDialog({
     e.preventDefault();
     setError("");
 
-    if (!title.trim()) { setError("Title is required"); return; }
-    if (selectedIds.length < 2) { setError("Select at least 2 courses for a bundle"); return; }
+    if (!title.trim()) {
+      setError("Title is required");
+      return;
+    }
+    if (selectedIds.length < 2) {
+      setError("Select at least 2 courses for a bundle");
+      return;
+    }
     const price = parseFloat(bundlePrice);
-    if (!bundlePrice || isNaN(price) || price <= 0) { setError("Enter a valid bundle price"); return; }
+    if (!bundlePrice || isNaN(price) || price <= 0) {
+      setError("Enter a valid bundle price");
+      return;
+    }
     if (price >= individualTotal) {
       setError(`Bundle price (₹${price}) must be less than individual total (₹${individualTotal})`);
       return;
@@ -174,9 +173,7 @@ function OfferFormDialog({
               )}
             </div>
             {selectedIds.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                Individual total: ₹{individualTotal}
-              </p>
+              <p className="text-xs text-muted-foreground">Individual total: ₹{individualTotal}</p>
             )}
           </div>
 
@@ -194,8 +191,8 @@ function OfferFormDialog({
             />
             {selectedIds.length >= 2 && bundlePrice && !isNaN(parseFloat(bundlePrice)) && (
               <p className="text-xs text-green-600 dark:text-green-400">
-                Discount: ₹{(individualTotal - parseFloat(bundlePrice)).toFixed(0)} off
-                ({Math.round((1 - parseFloat(bundlePrice) / individualTotal) * 100)}% savings)
+                Discount: ₹{(individualTotal - parseFloat(bundlePrice)).toFixed(0)} off (
+                {Math.round((1 - parseFloat(bundlePrice) / individualTotal) * 100)}% savings)
               </p>
             )}
           </div>
@@ -221,14 +218,17 @@ function OfferFormDialog({
             </button>
           </div>
 
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
           <Separator />
 
           <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={saving}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={saving}>
@@ -254,12 +254,16 @@ function AdminOffers() {
     queryKey: ["admin-bundle-offers"],
     queryFn: getBundleOffersClient,
     enabled: isAdmin && !!adminUser && typeof window !== "undefined",
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   const { data: coursesData } = useQuery({
     queryKey: ["admin-courses"],
     queryFn: () => getCoursesClient(),
     enabled: isAdmin && !!adminUser && typeof window !== "undefined",
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   const allCourses = coursesData?.courses ?? [];
@@ -278,8 +282,7 @@ function AdminOffers() {
     },
   });
 
-  const getCourseTitle = (id: string) =>
-    allCourses.find((c) => c.id === id)?.title ?? id;
+  const getCourseTitle = (id: string) => allCourses.find((c) => c.id === id)?.title ?? id;
 
   const getIndividualTotal = (offer: BundleOffer) =>
     offer.courseIds.reduce((sum, id) => {
@@ -315,9 +318,9 @@ function AdminOffers() {
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="pt-4 pb-4">
             <p className="text-sm text-foreground/80">
-              <strong>How it works:</strong> When a user adds courses to their cart that match an active bundle, 
-              the discounted bundle price is automatically applied at checkout. You can create any combination — 
-              e.g. Python + C++ together for ₹19 instead of ₹9 + ₹9.
+              <strong>How it works:</strong> When a user adds courses to their cart that match an
+              active bundle, the discounted bundle price is automatically applied at checkout. You
+              can create any combination — e.g. Python + C++ together for ₹19 instead of ₹9 + ₹9.
             </p>
           </CardContent>
         </Card>
@@ -345,12 +348,14 @@ function AdminOffers() {
             {offers.map((offer) => {
               const individualTotal = getIndividualTotal(offer);
               const savings = individualTotal - offer.bundlePrice;
-              const savingsPct = individualTotal > 0
-                ? Math.round((savings / individualTotal) * 100)
-                : 0;
+              const savingsPct =
+                individualTotal > 0 ? Math.round((savings / individualTotal) * 100) : 0;
 
               return (
-                <Card key={offer.id} className={`transition-shadow hover:shadow-md ${!offer.active ? "opacity-60" : ""}`}>
+                <Card
+                  key={offer.id}
+                  className={`transition-shadow hover:shadow-md ${!offer.active ? "opacity-60" : ""}`}
+                >
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
@@ -360,7 +365,10 @@ function AdminOffers() {
                             {offer.active ? "Active" : "Inactive"}
                           </Badge>
                           {savings > 0 && (
-                            <Badge variant="outline" className="text-green-600 border-green-300 dark:border-green-700">
+                            <Badge
+                              variant="outline"
+                              className="text-green-600 border-green-300 dark:border-green-700"
+                            >
                               {savingsPct}% off
                             </Badge>
                           )}
@@ -375,7 +383,9 @@ function AdminOffers() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => toggleMutation.mutate({ id: offer.id, active: !offer.active })}
+                          onClick={() =>
+                            toggleMutation.mutate({ id: offer.id, active: !offer.active })
+                          }
                           disabled={toggleMutation.isPending}
                           title={offer.active ? "Deactivate" : "Activate"}
                         >
@@ -425,15 +435,21 @@ function AdminOffers() {
                     <div className="grid grid-cols-3 gap-4 text-center">
                       <div>
                         <p className="text-xs text-muted-foreground">Individual Total</p>
-                        <p className="font-display text-lg font-bold text-muted-foreground line-through">₹{individualTotal}</p>
+                        <p className="font-display text-lg font-bold text-muted-foreground line-through">
+                          ₹{individualTotal}
+                        </p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Bundle Price</p>
-                        <p className="font-display text-lg font-bold text-primary">₹{offer.bundlePrice}</p>
+                        <p className="font-display text-lg font-bold text-primary">
+                          ₹{offer.bundlePrice}
+                        </p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Savings</p>
-                        <p className="font-display text-lg font-bold text-green-600 dark:text-green-400">₹{savings}</p>
+                        <p className="font-display text-lg font-bold text-green-600 dark:text-green-400">
+                          ₹{savings}
+                        </p>
                       </div>
                     </div>
                   </CardContent>
@@ -457,7 +473,9 @@ function AdminOffers() {
       {editingOffer && (
         <OfferFormDialog
           open={!!editingOffer}
-          onOpenChange={(open) => { if (!open) setEditingOffer(null); }}
+          onOpenChange={(open) => {
+            if (!open) setEditingOffer(null);
+          }}
           offer={editingOffer}
           allCourses={allCourses.filter((c) => c.status === "published")}
           onSuccess={() => {
@@ -468,7 +486,12 @@ function AdminOffers() {
       )}
 
       {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Bundle Offer?</AlertDialogTitle>
@@ -479,7 +502,9 @@ function AdminOffers() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget); }}
+              onClick={() => {
+                if (deleteTarget) deleteMutation.mutate(deleteTarget);
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteMutation.isPending}
             >

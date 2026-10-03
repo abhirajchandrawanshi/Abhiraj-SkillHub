@@ -1,80 +1,123 @@
-import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { getAuthInstance, initializeFirebase } from "@/services/database/firebase";
+import { useEffect, useState, useRef } from "react";
+import { useAuth } from "@/features/auth/use-auth";
 import { checkFirestoreAccess, readCourseAccess } from "@/services/access/access";
+
+/**
+ * Optimized hook for checking course access.
+ *
+ * KEY OPTIMIZATION: Uses the centralized AuthProvider's user state instead of
+ * creating a separate onAuthStateChanged listener per component instance.
+ *
+ * Before: Each CourseCard created its own Firebase Auth listener → N listeners
+ * After:  Single AuthProvider listener, this hook just reads user from context
+ *
+ * Also adds simple caching to avoid redundant Firestore reads when the same
+ * courseId is checked multiple times during a session.
+ */
+
+// Simple in-memory cache for access checks (avoids duplicate Firestore reads)
+const accessCache = new Map<string, { result: boolean; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCachedAccess(key: string): boolean | null {
+  const entry = accessCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL) {
+    accessCache.delete(key);
+    return null;
+  }
+  return entry.result;
+}
+
+function setCachedAccess(key: string, result: boolean) {
+  accessCache.set(key, { result, timestamp: Date.now() });
+}
+
+/** Clear access cache for a specific course (call after payment success) */
+export function invalidateAccessCache(courseId?: string) {
+  if (courseId) {
+    // Clear all cache entries that include this courseId
+    for (const key of accessCache.keys()) {
+      if (key.includes(courseId)) {
+        accessCache.delete(key);
+      }
+    }
+  } else {
+    accessCache.clear();
+  }
+}
 
 export function useDynamicCourseAccess(courseId: string) {
   const [access, setAccess] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
-  const [mounted, setMounted] = useState(false);
+  const { user, loading: authLoading } = useAuth();
+  const checkedRef = useRef<string>(""); // Track what we've already checked
 
+  // Check access when user state resolves
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    // Wait for auth to finish loading
+    if (authLoading) return;
 
-  useEffect(() => {
-    if (!mounted) {
-      setLoading(false);
-      return;
-    }
+    // Avoid duplicate checks for the same user+course combination
+    const checkKey = `${user?.uid || "guest"}:${courseId}`;
+    if (checkedRef.current === checkKey && !loading) return;
 
-    let unsubscribe: (() => void) | null = null;
-    let isSubscribed = true;
+    let cancelled = false;
 
-    const setupAuth = async () => {
-      try {
-        await initializeFirebase();
-        
-        if (!isSubscribed) return;
-
-        const auth = getAuthInstance();
-        if (!auth) {
-          console.error("Firebase auth not initialized");
+    const checkAccess = async () => {
+      // Check cache first
+      const cached = getCachedAccess(checkKey);
+      if (cached !== null) {
+        if (!cancelled) {
+          setAccess(cached);
           setLoading(false);
-          return;
+          checkedRef.current = checkKey;
         }
+        return;
+      }
 
-        unsubscribe = onAuthStateChanged(auth, async (user) => {
-          if (!isSubscribed) return;
-          
-          if (user) {
-            try {
-              const hasAccess = await checkFirestoreAccess(user.uid, courseId);
-              setAccess(hasAccess !== null);
-            } catch (error) {
-              console.error("Error checking dynamic course access:", error);
-              setAccess(false);
-            }
-          } else {
-            // Check localStorage for guest access
-            const guestAccess = readCourseAccess(courseId);
-            setAccess(guestAccess !== null);
+      if (user) {
+        try {
+          const hasAccess = await checkFirestoreAccess(user.uid, courseId);
+          const result = hasAccess !== null;
+          if (!cancelled) {
+            setAccess(result);
+            setCachedAccess(checkKey, result);
           }
-          setLoading(false);
-        });
-      } catch (error) {
-        console.error("Error setting up dynamic course access:", error);
-        if (isSubscribed) {
-          setLoading(false);
+        } catch (error) {
+          console.error("Error checking dynamic course access:", error);
+          if (!cancelled) setAccess(false);
         }
+      } else {
+        // Check localStorage for guest access
+        const guestAccess = readCourseAccess(courseId);
+        const result = guestAccess !== null;
+        if (!cancelled) {
+          setAccess(result);
+          setCachedAccess(checkKey, result);
+        }
+      }
+      if (!cancelled) {
+        setLoading(false);
+        checkedRef.current = checkKey;
       }
     };
 
-    setupAuth();
+    checkAccess();
 
     return () => {
-      isSubscribed = false;
-      if (unsubscribe) {
-        unsubscribe();
-      }
+      cancelled = true;
     };
-  }, [courseId, mounted]);
+  }, [courseId, user, authLoading, loading]);
 
-  // Listen for access changes (separate effect to avoid hook order issues)
+  // Listen for access changes (e.g., after payment)
   useEffect(() => {
-    if (!mounted) return;
+    if (typeof window === "undefined") return;
 
     const handleAccessChange = () => {
+      // Invalidate cache for this course
+      invalidateAccessCache(courseId);
+
       const currentAccess = readCourseAccess(courseId);
       setAccess(currentAccess !== null);
     };
@@ -85,7 +128,7 @@ export function useDynamicCourseAccess(courseId: string) {
     return () => {
       window.removeEventListener(event, handleAccessChange);
     };
-  }, [courseId, mounted]);
+  }, [courseId]);
 
   return { access, loading };
 }
