@@ -81,5 +81,11 @@ service cloud.firestore {
     match /adminUsers/{userId} {
       allow read, write: if false; // No direct access, managed via Firebase Console
     }
+    
+    // User Profiles collection
+    match /userProfiles/{userId} {
+      // Users can only read and write their own profile
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
   }
 }

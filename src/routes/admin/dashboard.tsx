@@ -227,7 +227,7 @@ function AdminDashboard() {
           </div>
         </div>
 
-        {/* ── Course Ratings & Sales ── */}
+        {/* ── Paid Course Sales & Ratings ── */}
         {stats.courseStats && stats.courseStats.length > 0 && (
           <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -236,93 +236,53 @@ function AdminDashboard() {
                   <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800">Course Ratings & Sales</h3>
+                  <h3 className="text-sm font-bold text-slate-800">Paid Course Sales &amp; Ratings</h3>
                   <p className="text-xs font-medium text-slate-600">
-                    Actual ratings submitted by users
+                    User ratings &amp; purchase counts (paid courses only)
                   </p>
                 </div>
               </div>
               <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-full">
-                {stats.courseStats.length} courses
+                {stats.courseStats.length} paid courses
               </span>
             </div>
-            <div className="divide-y divide-slate-50">
-              {stats.courseStats.map((course: any) => {
-                const r = course.ratings || { total: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-                const avgRating =
-                  r.total > 0
-                    ? (r[5] * 5 + r[4] * 4 + r[3] * 3 + r[2] * 2 + r[1] * 1) / r.total
-                    : 0;
-                return (
-                  <div key={course.id} className="px-6 py-4">
-                    <div className="flex items-start justify-between gap-4 mb-3">
-                      <p className="font-semibold text-slate-800 text-sm leading-snug">
-                        {course.title}
-                      </p>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-xs font-bold bg-blue-50 text-blue-600 px-2.5 py-1 rounded-full">
-                          {course.purchases} sales
-                        </span>
-                        {r.total > 0 && (
-                          <span className="text-xs font-bold bg-amber-50 text-amber-600 px-2.5 py-1 rounded-full">
-                            {r.total} ratings
-                          </span>
-                        )}
-                      </div>
-                    </div>
 
-                    {r.total > 0 ? (
-                      <div className="flex items-start gap-6">
-                        {/* Avg score */}
-                        <div className="flex flex-col items-center">
-                          <span className="text-3xl font-black text-slate-900 leading-none">
-                            {avgRating.toFixed(1)}
-                          </span>
-                          <div className="flex items-center gap-0.5 mt-1">
-                            {[1, 2, 3, 4, 5].map((s) => (
-                              <Star
-                                key={s}
-                                className={`h-3 w-3 ${
-                                  s <= Math.round(avgRating)
-                                    ? "fill-amber-400 text-amber-400"
-                                    : "text-slate-200 fill-slate-200"
-                                }`}
-                              />
-                            ))}
-                          </div>
-                          <span className="text-[10px] font-medium text-slate-600 mt-1">
-                            avg score
-                          </span>
-                        </div>
-                        {/* Bar breakdown */}
-                        <div className="flex-1 space-y-1">
-                          {[5, 4, 3, 2, 1].map((star) => {
-                            const count = r[star] || 0;
-                            const pct = r.total > 0 ? Math.round((count / r.total) * 100) : 0;
-                            return (
-                              <div key={star} className="flex items-center gap-2">
-                                <span className="text-[11px] font-medium text-slate-600 w-5 text-right shrink-0">
-                                  {star}★
-                                </span>
-                                <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
-                                  <div
-                                    className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-400 transition-all duration-700"
-                                    style={{ width: `${pct}%` }}
-                                  />
-                                </div>
-                                <span className="text-[11px] font-medium text-slate-600 w-5 shrink-0">
-                                  {count}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-500 italic">
-                        No ratings yet for this course
-                      </p>
-                    )}
+            {/* Compact card grid */}
+            <div className="p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {stats.courseStats.map((course: any) => {
+                const ratingCount = course.ratingCount ?? 0;
+                const starBreakdown: Record<number, number> = course.starBreakdown ?? {};
+                // Only show stars that have at least 1 vote, in descending order
+                const activeStar = [5, 4, 3, 2, 1].filter((s) => (starBreakdown[s] ?? 0) > 0);
+                return (
+                  <div
+                    key={course.id}
+                    className="flex flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50 p-4 hover:border-slate-200 transition-colors"
+                  >
+                    {/* Title */}
+                    <p className="text-sm font-semibold text-slate-800 leading-snug line-clamp-2">
+                      {course.title}
+                    </p>
+
+                    {/* Badges row */}
+                    <div className="flex items-center gap-2 flex-wrap mt-auto">
+                      {/* Sales */}
+                      <span className="inline-flex items-center gap-1 text-xs font-bold bg-blue-50 text-blue-600 px-2.5 py-1 rounded-full">
+                        <ShoppingBag className="h-3 w-3" />
+                        {course.purchases} {course.purchases === 1 ? "sale" : "sales"}
+                      </span>
+
+                      {/* Per-star breakdown — only shown when ratings exist */}
+                      {ratingCount > 0 && activeStar.map((star) => (
+                        <span
+                          key={star}
+                          className="inline-flex items-center gap-0.5 text-xs font-bold bg-amber-50 text-amber-600 px-2 py-1 rounded-full"
+                        >
+                          <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+                          {star} ({starBreakdown[star]})
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 );
               })}

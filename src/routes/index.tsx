@@ -40,14 +40,20 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/features/auth/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useCart, CartProvider } from "@/features/cart/use-cart";
 import { useDynamicCourseAccess } from "@/features/courses/use-dynamic-course-access";
 import type { CourseAccess } from "@/services/access/access";
 import { readCourseAccess } from "@/services/access/access";
-import { useQuery } from "@tanstack/react-query";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { getUserProfile, updateUserNotificationPreference, updateUserProfileName } from "@/services/database/user-profile";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   submitCourseRating,
   submitSuggestion,
@@ -112,19 +118,42 @@ function strHash(s: string): number {
 
 /**
  * Returns a displayed rating count that grows asymptotically from the
- * publishedDate toward the stored target:
- *   day 1 ≈ 25%  |  day 2 ≈ 50%  |  day 3 ≈ 70%  |  day 5 ≈ 85%  |  day 7+ ≈ 95%
+ * course launch date toward the stored target:
+ *   day 0 ≈  8%  |  day 1 ≈ 21%  |  day 2 ≈ 36%  |  day 3 ≈ 50%
+ *   day 4 ≈ 69%  |  day 5 ≈ 85%  |  day 7+ → 95%+
  * Each day has tiny seeded noise so it doesn't look frozen.
+ *
+ * Priority for reference date: publishedDate → createdAt → fixed anchor (2024-08-01)
+ * The function ALWAYS runs regardless of whether publishedDate exists.
  */
-function growingRatingCount(target: number, publishedDateStr: string, courseId: string): number {
+function growingRatingCount(
+  target: number,
+  publishedDateStr: string | undefined,
+  courseId: string,
+  createdAtStr?: string,
+): number {
   if (!target) return 0;
-  let pubDate: Date;
-  try {
-    pubDate = new Date(publishedDateStr);
-    if (isNaN(pubDate.getTime())) throw new Error();
-  } catch {
-    pubDate = new Date(); // fallback: treat as published today
+
+  // Build an ordered list of candidate date strings to try
+  const candidates = [
+    publishedDateStr,
+    createdAtStr,
+    "2024-08-01", // Hard anchor: all courses are at least this old
+  ];
+
+  let pubDate: Date | null = null;
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const d = new Date(candidate);
+    if (!isNaN(d.getTime())) {
+      pubDate = d;
+      break;
+    }
   }
+
+  // Should never be null due to the anchor, but be safe
+  if (!pubDate) pubDate = new Date("2024-08-01");
+
   const days = Math.max(0, Math.floor((Date.now() - pubDate.getTime()) / 86_400_000));
 
   const schedule = [0.08, 0.21, 0.36, 0.5, 0.69, 0.85];
@@ -302,10 +331,14 @@ function CourseCard({
   const baseRating = course.rating || 4.8;
   const baseCount = course.ratingCount || 1200;
 
-  // Grow the displayed count from publishedDate toward the stored target
-  const displayedCount = course.publishedDate
-    ? growingRatingCount(baseCount, course.publishedDate, course.id)
-    : baseCount;
+  // Resolve createdAt to a string for the growth function
+  const createdAtStr =
+    typeof course.createdAt === "string"
+      ? course.createdAt
+      : course.createdAt?.toDate?.().toISOString?.() ?? undefined;
+
+  // Always run the growth formula — falls back to createdAt or anchor date if publishedDate is missing
+  const displayedCount = growingRatingCount(baseCount, course.publishedDate, course.id, createdAtStr);
 
   // Fluctuate rating ±0.1 deterministically each calendar day
   const rating = fluctuatingRating(baseRating, course.id);
@@ -547,21 +580,13 @@ function FreeCourseCard({ course, index }: { course: Course; index: number }) {
         return;
       }
       
-      // Fetch private data securely
-      // For free courses without a userId (publicly free), we pass a placeholder so the server function can check if it's free. Wait, getPrivateCourseAccessInfoServer enforces auth!
-      // But wait, if it's a completely free course, they might not need to login?
-      // No, to get access to completely free courses, they still need to either be authorized or the server function should allow free courses.
-      
-      let privateInfo: { resources?: {url: string}[]; accessInfo?: string } = {
-        resources: course.resources,
-        accessInfo: course.accessInfo
-      };
-      
-      if (userId) {
-         privateInfo = await getPrivateCourseAccessInfo({
-          data: { courseId: course.id, userId }
-        });
-      }
+      // Fetch private data securely from the server.
+      // Free courses bypass access verification on the server side, so we can
+      // always call this — even for unauthenticated users — using "anonymous" as a placeholder.
+      const effectiveUserId = userId || "anonymous";
+      const privateInfo = await getPrivateCourseAccessInfo({
+        data: { courseId: course.id, userId: effectiveUserId },
+      });
 
       // Try resource links
       if (privateInfo.resources && privateInfo.resources.length > 0 && privateInfo.resources[0].url) {
@@ -647,6 +672,7 @@ function FreeCourseCard({ course, index }: { course: Course; index: number }) {
 function Landing() {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user, signOutUser } = useAuth();
   const { cartCount } = useCart();
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -662,9 +688,25 @@ function Landing() {
   const [cartCheckoutOffer, setCartCheckoutOffer] = useState<BundleOffer | null>(null);
   const [isCartCheckout, setIsCartCheckout] = useState(false);
 
+  // User Profile State
+  const [userName, setUserName] = useState("");
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  const { data: userProfile, isLoading: profileLoading } = useQuery({
+    queryKey: ["user-profile", user?.uid],
+    queryFn: () => user?.uid ? getUserProfile(user.uid) : null,
+    enabled: !!user?.uid,
+    staleTime: 5 * 60 * 1000, // Cache profile for 5 minutes
+  });
+
+  useEffect(() => {
+    if (userProfile && userProfile.name) {
+      setUserName(userProfile.name);
+    }
+  }, [userProfile]);
 
   // --- Search ---
   const [searchQuery, setSearchQuery] = useState("");
@@ -886,20 +928,13 @@ function Landing() {
 
             <ThemeToggle />
             {user ? (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => void navigate({ to: "/" })}
-                  className="h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold hover:opacity-90"
-                >
-                  {user.email ? user.email.charAt(0).toUpperCase() : "AC"}
-                </button>
-                <button
-                  onClick={() => void signOutUser()}
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-1"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              </div>
+              <button
+                onClick={() => void navigate({ to: "/profile" })}
+                className="h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold hover:opacity-90 focus:outline-none transition-opacity"
+                title="Your Profile"
+              >
+                {userName ? userName.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : "AC")}
+              </button>
             ) : (
               <button
                 onClick={() => void navigate({ to: "/login" })}

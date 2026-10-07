@@ -282,15 +282,28 @@ export async function getDashboardStatsClient(): Promise<{ success: boolean; sta
       console.error("Error fetching ratings:", e);
     }
 
-    // Map course data with purchase counts and ratings
-    const courseStats = coursesSnapshot.docs.map((doc: any) => {
-      return {
-        id: doc.id,
-        title: doc.data()["title"] || "Unknown Course",
-        purchases: purchaseCountByCourse[doc.id] || 0,
-        ratings: ratingsByCourse[doc.id] || { total: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-      };
-    }).sort((a: any, b: any) => b.purchases - a.purchases);
+    // Map course data with purchase counts and ratings - PAID courses only
+    const courseStats = coursesSnapshot.docs
+      .filter((doc: any) => {
+        const data = doc.data();
+        return data["isFree"] !== true && (data["price"] ?? 0) > 0;
+      })
+      .map((doc: any) => {
+        const r = ratingsByCourse[doc.id] || { total: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        const avgRating =
+          r.total > 0
+            ? (r[5] * 5 + r[4] * 4 + r[3] * 3 + r[2] * 2 + r[1] * 1) / r.total
+            : 0;
+        return {
+          id: doc.id,
+          title: doc.data()["title"] || "Unknown Course",
+          purchases: purchaseCountByCourse[doc.id] || 0,
+          ratingCount: r.total,
+          avgRating: Math.round(avgRating * 10) / 10,
+          starBreakdown: { 1: r[1], 2: r[2], 3: r[3], 4: r[4], 5: r[5] },
+        };
+      })
+      .sort((a: any, b: any) => b.purchases - a.purchases);
 
 
     // Fetch user suggestions (only from the last 48 hours)

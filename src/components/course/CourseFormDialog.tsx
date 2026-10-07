@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Loader2, Upload, Plus, Trash2, FileText, Link as LinkIcon, Gift, Star } from "lucide-react";
 import { uploadToSupabase } from "@/services/storage/supabase-storage";
 import { uploadCoursePdf } from "@/services/storage/supabase-server";
+import { notifySubscribersOfNewCourse } from "@/services/email/brevo";
 
 import {
   Dialog,
@@ -303,7 +304,13 @@ export function CourseFormDialog({
             cleanCourseData[key] = value;
           }
         });
-        await createCourseClient(cleanCourseData);
+        const result = await createCourseClient(cleanCourseData);
+        
+        // Notify subscribers if it's a new paid course
+        if (result.success && !isFree && result.course) {
+          notifySubscribersOfNewCourse({ data: { courseId: result.course.id } })
+            .catch(e => console.error("Notification error:", e));
+        }
       }
       
       onSuccess?.();

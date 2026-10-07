@@ -33,6 +33,11 @@ function getAdminFirestore() {
   }
 }
 
+// In-memory cache for published courses
+let cachedCourses: any[] | null = null;
+let coursesCacheTimestamp = 0;
+const COURSES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Securely fetches published courses and strips out private data
  * before sending it to the client.
@@ -40,6 +45,11 @@ function getAdminFirestore() {
 export const getPublishedCoursesServer = createServerFn({ method: "GET" })
   .handler(async () => {
     try {
+      const now = Date.now();
+      if (cachedCourses && (now - coursesCacheTimestamp) < COURSES_CACHE_TTL) {
+        return cachedCourses;
+      }
+
       const db = getAdminFirestore();
       // Fetch only published courses
       const snapshot = await db.collection("courses")
@@ -94,7 +104,13 @@ export const getPublishedCoursesServer = createServerFn({ method: "GET" })
       snapshot.docs.forEach(processDoc);
       legacySnapshot.docs.forEach(processDoc);
       
-      return Array.from(coursesMap.values());
+      const courses = Array.from(coursesMap.values());
+      
+      // Update cache
+      cachedCourses = courses;
+      coursesCacheTimestamp = Date.now();
+      
+      return courses;
     } catch (error) {
       console.error("Error securely fetching published courses:", error);
       throw new Error("Failed to fetch courses");
@@ -127,6 +143,8 @@ export const getPrivateCourseAccessInfo = createServerFn({ method: "POST" })
     const isFreeCourse = courseData?.price === 0 || courseData?.isFree === true;
 
     // 2. Verify Access if not free
+    // Note: if userId is "anonymous" (unauthenticated user) and the course is free,
+    // the block below is skipped entirely, so free courses are always accessible.
     if (!isFreeCourse) {
       const accessRef = db.collection("courseAccess");
       const snapshot = await accessRef

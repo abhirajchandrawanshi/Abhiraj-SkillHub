@@ -253,3 +253,93 @@ export const sendResourceEmail = createServerFn({ method: "POST" })
       return { success: false, error: error instanceof Error ? error.message : "Failed to send email" };
     }
   });
+
+function createNewCourseEmailTemplate(course: any) {
+  const websiteUrl = getWebsiteUrl();
+  const subject = `🎉 New Course Released: ${course.title}`;
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>New Course Alert</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background: #f3f4f6; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>🚀 New Course Alert!</h1>
+          <p>We just published a brand new course</p>
+        </div>
+        <div class="content">
+          <p>Hi there,</p>
+          <p>A new exciting course has just been added to Abhiraj Academy!</p>
+          
+          <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:20px;margin:20px 0;">
+            <h3 style="margin:0 0 8px 0;color:#1f2937;font-size:18px;">📚 ${course.title}</h3>
+            ${course.description ? `<p style="margin:0 0 12px 0;color:#6b7280;font-size:14px;">${course.description}</p>` : ''}
+            <p style="margin:0 0 8px 0;font-size:14px;font-weight:bold;color:#2563eb;">Price: ₹${course.price}</p>
+          </div>
+          
+          <p style="margin-top:24px;">Check it out now and start learning:</p>
+          <a href="${websiteUrl}" style="display:inline-block;padding:15px 30px;background:#f59e0b;color:white;text-decoration:none;border-radius:5px;margin:16px 0;">View Course</a>
+          
+          <div class="footer">
+            <p>You received this email because you opted into new course alerts.</p>
+            <p>If you want to turn off this notification, go to your profile on the website and turn off notifications.</p>
+            <p>© 2026 Abhiraj Courses. All rights reserved.</p>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return { subject, html };
+}
+
+export const notifySubscribersOfNewCourse = createServerFn({ method: "POST" })
+  .validator(z.object({
+    courseId: z.string(),
+  }))
+  .handler(async ({ data }) => {
+    try {
+      const course = await getCourseByIdServer(data.courseId);
+      if (!course) {
+        return { success: false, error: "Course not found" };
+      }
+      
+      const db = getAdminFirestore();
+      const profilesSnap = await db.collection("userProfiles").where("notificationsEnabled", "==", true).get();
+      
+      if (profilesSnap.empty) {
+        console.log("No users subscribed to notifications.");
+        return { success: true, count: 0 };
+      }
+      
+      const emails = profilesSnap.docs.map(doc => doc.data()['email']).filter(Boolean);
+      console.log(`Found ${emails.length} subscribers. Sending notifications...`);
+      
+      const template = createNewCourseEmailTemplate(course);
+      
+      // Send to all sequentially (could be parallelized for larger lists)
+      let sentCount = 0;
+      for (const email of emails) {
+        const result = await sendEmail(email, template.subject, template.html);
+        if (result.success) sentCount++;
+      }
+      
+      return { success: true, count: sentCount };
+    } catch (error) {
+      console.error("Error notifying subscribers:", error);
+      return { success: false, error: error instanceof Error ? error.message : "Failed to notify subscribers" };
+    }
+  });
