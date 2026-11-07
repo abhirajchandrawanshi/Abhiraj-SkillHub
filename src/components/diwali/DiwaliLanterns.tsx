@@ -3,7 +3,7 @@ import { memo } from "react";
 export const DiwaliLanterns = memo(function DiwaliLanterns() {
   return (
     <div
-      className="pointer-events-none fixed top-0 left-0 right-0 z-40 select-none overflow-visible"
+      className="pointer-events-none absolute top-0 left-0 right-0 z-30 select-none overflow-visible"
       aria-hidden="true"
     >
       {/* Left Lantern (Akash Kandil) */}

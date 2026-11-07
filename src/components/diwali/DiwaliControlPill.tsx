@@ -1,4 +1,4 @@
-import { useState, memo } from "react";
+import { useState, useEffect, memo } from "react";
 import { Volume2, VolumeX, Flame } from "lucide-react";
 import { diwaliSound } from "./diwali-sound";
 
@@ -10,6 +10,16 @@ export const DiwaliControlPill = memo(function DiwaliControlPill({
   onToggleActive?: () => void;
 }) {
   const [isMuted, setIsMuted] = useState(diwaliSound.getMuted());
+
+  useEffect(() => {
+    const handleSoundChange = (e: CustomEvent<{ isMuted: boolean }>) => {
+      setIsMuted(e.detail.isMuted);
+    };
+    window.addEventListener("diwali-sound-change" as any, handleSoundChange);
+    return () => {
+      window.removeEventListener("diwali-sound-change" as any, handleSoundChange);
+    };
+  }, []);
 
   const handleToggleSound = (e: React.MouseEvent) => {
     e.stopPropagation();

@@ -894,7 +894,7 @@ function Landing() {
   return (
     <KineticGrid isDark={isDark}>
       <header
-        className="sticky top-0 z-50 py-4 border-b border-border/20 backdrop-blur-md"
+        className="relative z-50 py-4 border-b border-border/20 backdrop-blur-md"
         style={{ background: isDark ? "rgba(22,22,24,0.80)" : "rgba(248,249,251,0.80)" }}
       >
         <div className="mx-auto flex max-w-[1400px] items-center justify-between px-6">

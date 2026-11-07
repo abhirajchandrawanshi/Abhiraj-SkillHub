@@ -61,7 +61,7 @@ export const DiwaliLights = memo(function DiwaliLights() {
 
   return (
     <div
-      className="pointer-events-none fixed top-0 left-0 right-0 z-40 overflow-hidden select-none h-16 sm:h-20"
+      className="pointer-events-none absolute top-0 left-0 right-0 z-30 overflow-hidden select-none h-16 sm:h-20"
       aria-hidden="true"
     >
       {/* Delicate dark bronze series wire across top */}

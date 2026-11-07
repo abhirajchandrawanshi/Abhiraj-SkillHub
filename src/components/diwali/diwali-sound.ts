@@ -1,11 +1,39 @@
 // Synthesized audio effects for Diwali fireworks using the Web Audio API
 // 100% self-contained, no external audio files needed, works offline, zero lag
 
+const SOUND_STORAGE_KEY = "abhiacademy-diwali-sound-muted";
+
 class DiwaliSoundManager {
   private ctx: AudioContext | null = null;
-  private isMuted: boolean = true; // Default muted for smooth user experience
+  private isMuted: boolean = false; // Voice ON by default as requested!
 
-  constructor() {}
+  constructor() {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(SOUND_STORAGE_KEY);
+        // If user explicitly muted it previously, respect it; otherwise default to false (Voice ON)
+        this.isMuted = stored === "true";
+      } catch {
+        this.isMuted = false;
+      }
+
+      // Auto-unlock AudioContext on first user gesture (satisfies browser autoplay policies)
+      const unlockAudio = () => {
+        if (!this.isMuted) {
+          this.initCtx();
+        }
+        window.removeEventListener("pointerdown", unlockAudio);
+        window.removeEventListener("touchstart", unlockAudio);
+        window.removeEventListener("keydown", unlockAudio);
+        window.removeEventListener("click", unlockAudio);
+      };
+
+      window.addEventListener("pointerdown", unlockAudio, { once: true, passive: true });
+      window.addEventListener("touchstart", unlockAudio, { once: true, passive: true });
+      window.addEventListener("keydown", unlockAudio, { once: true, passive: true });
+      window.addEventListener("click", unlockAudio, { once: true, passive: true });
+    }
+  }
 
   private initCtx() {
     if (!this.ctx && typeof window !== "undefined") {
@@ -27,6 +55,16 @@ class DiwaliSoundManager {
 
   public setMuted(muted: boolean) {
     this.isMuted = muted;
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem(SOUND_STORAGE_KEY, String(muted));
+        window.dispatchEvent(
+          new CustomEvent("diwali-sound-change", { detail: { isMuted: muted } })
+        );
+      }
+    } catch {
+      // Safe catch
+    }
     if (!muted) {
       this.initCtx();
     }
