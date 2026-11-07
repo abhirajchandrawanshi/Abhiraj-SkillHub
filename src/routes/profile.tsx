@@ -273,7 +273,7 @@ function ProfilePage() {
                     New Course Alerts
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                    Get notified earliest for our newly released courses
+                    Get notified first whenever a new paid course is released.
                   </p>
                 </div>
                 <Switch
@@ -282,7 +282,13 @@ function ProfilePage() {
                   onCheckedChange={setNotificationsEnabled}
                 />
               </div>
+              <p className="text-xs text-muted-foreground bg-secondary/40 rounded-lg px-3 py-2.5 leading-relaxed">
+                💡 We don't want to bother you unnecessarily. If you'd prefer not to receive course updates,
+                you can turn off notifications anytime using the toggle above. Transactional emails like
+                payment confirmations are always delivered regardless of this setting.
+              </p>
             </div>
+
 
             {/* Save Button */}
             <div className="pt-6 border-t border-border flex flex-col sm:flex-row gap-3 justify-end items-center mt-8">

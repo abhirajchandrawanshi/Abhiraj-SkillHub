@@ -87,5 +87,24 @@ service cloud.firestore {
       // Users can only read and write their own profile
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    // ── Notification System collections ──────────────────────────────────────
+    // These are ONLY ever accessed via the Firebase Admin SDK (server functions).
+    // The Admin SDK bypasses security rules — these deny-all rules are defence-in-depth.
+
+    // Notification campaigns — one per published paid course
+    match /notificationCampaigns/{campaignId} {
+      allow read, write: if false; // Server-only (Admin SDK)
+    }
+
+    // Per-recipient queue entries
+    match /notificationQueue/{queueId} {
+      allow read, write: if false; // Server-only (Admin SDK)
+    }
+
+    // Daily email usage counters (promo + transactional)
+    match /emailDailyUsage/{dateId} {
+      allow read, write: if false; // Server-only (Admin SDK)
+    }
   }
 }

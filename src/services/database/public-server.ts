@@ -1,37 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-
-// Initialize Firebase Admin SDK for server-side operations
-function getAdminFirestore() {
-  if (getApps().length > 0) {
-    return getFirestore();
-  }
-
-  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
-  
-  if (!privateKey || !process.env.FIREBASE_ADMIN_PROJECT_ID || !process.env.FIREBASE_ADMIN_CLIENT_EMAIL) {
-    throw new Error("Firebase Admin credentials not configured");
-  }
-
-  try {
-    const app = initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-        privateKey: privateKey,
-        clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-      }),
-    });
-
-    const db = getFirestore(app);
-    try { db.settings({ preferRest: true }); } catch (e) {}
-    return db;
-  } catch (error) {
-    console.error("Failed to initialize Firebase Admin SDK:", error);
-    throw error;
-  }
-}
+import { getAdminFirestore } from "./admin-firestore";
 
 // In-memory cache for published courses
 let cachedCourses: any[] | null = null;
@@ -50,7 +19,7 @@ export const getPublishedCoursesServer = createServerFn({ method: "GET" })
         return cachedCourses;
       }
 
-      const db = getAdminFirestore();
+      const db = await getAdminFirestore();
       // Fetch only published courses
       const snapshot = await db.collection("courses")
         .where("status", "==", "published")
@@ -91,29 +60,22 @@ export const getPublishedCoursesServer = createServerFn({ method: "GET" })
           ratingCount: data.ratingCount,
           publishedDate: data.publishedDate,
           isFree: data.isFree,
-          // Explicitly EXCLUDE:
-          // - resources
-          // - accessInfo
-          // - pdfPath (Safe to include since the file itself is protected by signed URL checks that verify enrollment)
           pdfPath: data.pdfPath, 
         };
-        
         coursesMap.set(doc.id, publicCourseData);
       };
-      
+
       snapshot.docs.forEach(processDoc);
       legacySnapshot.docs.forEach(processDoc);
-      
-      const courses = Array.from(coursesMap.values());
-      
-      // Update cache
-      cachedCourses = courses;
-      coursesCacheTimestamp = Date.now();
-      
-      return courses;
+
+      const result = Array.from(coursesMap.values());
+      cachedCourses = result;
+      coursesCacheTimestamp = now;
+
+      return result;
     } catch (error) {
-      console.error("Error securely fetching published courses:", error);
-      throw new Error("Failed to fetch courses");
+      console.error("Failed to fetch published courses on server:", error);
+      return [];
     }
   });
 
@@ -129,7 +91,7 @@ export const getPrivateCourseAccessInfo = createServerFn({ method: "POST" })
     })
   )
   .handler(async ({ data }) => {
-    const db = getAdminFirestore();
+    const db = await getAdminFirestore();
 
     // 1. Fetch course details to check if it's free
     const courseRef = db.collection("courses").doc(data.courseId);
@@ -143,30 +105,32 @@ export const getPrivateCourseAccessInfo = createServerFn({ method: "POST" })
     const isFreeCourse = courseData?.price === 0 || courseData?.isFree === true;
 
     // 2. Verify Access if not free
-    // Note: if userId is "anonymous" (unauthenticated user) and the course is free,
-    // the block below is skipped entirely, so free courses are always accessible.
     if (!isFreeCourse) {
-      const accessRef = db.collection("courseAccess");
-      const snapshot = await accessRef
+      // Check user purchases collection
+      const purchaseRef = db.collection("users")
+        .doc(data.userId)
+        .collection("purchases")
+        .doc(data.courseId);
+        
+      const purchaseSnap = await purchaseRef.get();
+
+      // Check legacy course_access collection
+      const legacyAccessRef = db.collection("course_access")
         .where("userId", "==", data.userId)
-        .where("courseId", "==", data.courseId)
-        .get();
+        .where("courseId", "==", data.courseId);
+        
+      const legacySnap = await legacyAccessRef.get();
 
-      if (snapshot.empty) {
-        const emailSnapshot = await accessRef
-          .where("email", "==", data.userId)
-          .where("courseId", "==", data.courseId)
-          .get();
+      const hasAccess = purchaseSnap.exists || !legacySnap.empty;
 
-        if (emailSnapshot.empty) {
-          throw new Error("You do not have access to this course.");
-        }
+      if (!hasAccess) {
+        throw new Error("Unauthorized: You do not have access to this course's private resources.");
       }
     }
 
-    // 3. Access Verified. Return private fields.
+    // 3. Return ONLY the private details
     return {
-      resources: courseData?.resources || [],
+      resources: courseData?.resources || "",
       accessInfo: courseData?.accessInfo || "",
     };
   });

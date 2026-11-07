@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getAdminFirestore } from "@/services/database/admin-firestore";
 
 
 
@@ -71,54 +70,12 @@ function basicAuthHeader(keyId: string, keySecret: string) {
 }
 
 // Initialize Firebase Admin SDK for server-side operations
-function getAdminFirestore() {
-  console.log("getAdminFirestore called, existing apps:", getApps().length);
-  
-  if (getApps().length > 0) {
-    console.log("Returning existing Firestore instance");
-    return getFirestore();
-  }
-
-  console.log("Initializing Firebase Admin SDK");
-  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
-  
-  console.log("Environment check:", {
-    hasPrivateKey: !!privateKey,
-    hasProjectId: !!process.env.FIREBASE_ADMIN_PROJECT_ID,
-    hasClientEmail: !!process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-    projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-  });
-  
-  if (!privateKey || !process.env.FIREBASE_ADMIN_PROJECT_ID || !process.env.FIREBASE_ADMIN_CLIENT_EMAIL) {
-    console.error("Firebase Admin credentials not configured");
-    throw new Error("Firebase Admin credentials not configured");
-  }
-
-  try {
-    const app = initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-        privateKey: privateKey,
-        clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-      }),
-    });
-
-    console.log("Firebase Admin SDK initialized successfully");
-    const db = getFirestore(app);
-    try { db.settings({ preferRest: true }); } catch (e) { /* ignore if already set */ }
-    return db;
-  } catch (error) {
-    console.error("Failed to initialize Firebase Admin SDK:", error);
-    throw error;
-  }
-}
 
 // Server-side course fetch using Admin SDK
 async function getCourseByIdServer(courseId: string) {
   try {
     console.log("Fetching course from Firestore (server):", courseId);
-    const db = getAdminFirestore();
+    const db = await getAdminFirestore();
     const docRef = db.collection("courses").doc(courseId);
     const snap = await docRef.get();
 
@@ -145,7 +102,7 @@ async function getCourseByIdServer(courseId: string) {
 async function getBundleOfferByIdServer(bundleId: string) {
   try {
     console.log("Fetching bundle offer from Firestore (server):", bundleId);
-    const db = getAdminFirestore();
+    const db = await getAdminFirestore();
     const docRef = db.collection("bundleOffers").doc(bundleId);
     const snap = await docRef.get();
 
@@ -225,11 +182,12 @@ export const createRazorpayOrder = createServerFn({ method: "POST" })
         // Fetch bundle price securely from server
         try {
           const bundle = await getBundleOfferByIdServer(data.bundleOfferId);
-          if (!bundle || !bundle.price) {
+          const bundlePriceVal = bundle?.bundlePrice ?? bundle?.price;
+          if (!bundle || typeof bundlePriceVal !== "number" || bundlePriceVal <= 0) {
             throw new Error(`Invalid or missing bundle offer: ${data.bundleOfferId}`);
           }
-          amountPaise = bundle.price * 100;
-          courseTitle = bundle.title || (courseIds.length > 1 ? `Bundle (${courseIds.length} courses)` : (courseIds[0] || "Course"));
+          amountPaise = Math.round(bundlePriceVal * 100);
+          courseTitle = bundle.title?.trim() || (courseIds.length > 1 ? `Bundle (${courseIds.length} courses)` : (courseIds[0] || "Course"));
           console.log("Using secured server bundle price:", amountPaise);
         } catch (error) {
           console.error("Error fetching bundle:", error);
@@ -395,7 +353,7 @@ export const verifyRazorpayPayment = createServerFn({ method: "POST" })
     
     if (courseIds.length > 0) {
       try {
-        const db = getAdminFirestore();
+        const db = await getAdminFirestore();
         const expiresAt = isGuest ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null;
         const grantedAt = new Date().toISOString();
         

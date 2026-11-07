@@ -15,6 +15,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { getAuthInstance, initializationError, initializeFirebase } from "@/services/database/firebase";
 import { AuthContext, type AuthContextValue } from "@/features/auth/use-auth";
 import { migrateGuestPurchasesToAccount } from "@/services/access/access";
+import { ensureUserProfileExists } from "@/services/notifications/notification-server";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthContextValue["user"]>(null);
@@ -61,9 +62,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           setUser(nextUser);
           
-          // Migrate guest purchases when user logs in
           if (nextUser?.email) {
+            // Migrate guest purchases on login
             void migrateGuestPurchasesToAccount(nextUser.uid, nextUser.email);
+            // Create default profile (notificationsEnabled=true) for new users
+            // Never overwrites existing preference — idempotent
+            ensureUserProfileExists({ data: { uid: nextUser.uid, email: nextUser.email } })
+              .catch((e) => console.warn("[AuthProvider] ensureUserProfile error:", e));
           }
           
           setLoading(false);

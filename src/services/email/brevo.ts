@@ -1,38 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getAdminFirestore } from "@/services/database/admin-firestore";
 
 
 
 // Initialize Firebase Admin SDK for server-side Firestore access
-function getAdminFirestore() {
-  if (getApps().length > 0) {
-    return getFirestore();
-  }
-
-  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
-
-  if (!privateKey || !process.env.FIREBASE_ADMIN_PROJECT_ID || !process.env.FIREBASE_ADMIN_CLIENT_EMAIL) {
-    throw new Error("Firebase Admin credentials not configured");
-  }
-
-  const app = initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-      privateKey: privateKey,
-      clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-    }),
-  });
-
-  const db = getFirestore(app);
-  try { db.settings({ preferRest: true }); } catch (e) {}
-  return db;
-}
 
 // Server-side course fetch using Admin SDK
 async function getCourseByIdServer(courseId: string) {
-  const db = getAdminFirestore();
+  const db = await getAdminFirestore();
   const docRef = db.collection("courses").doc(courseId);
   const snap = await docRef.get();
 
@@ -67,7 +43,12 @@ function getWebsiteUrl() {
   return websiteUrl;
 }
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  attachments?: Array<{ name: string; content: string }>, // base64-encoded content
+) {
   const apiKey = getBrevoApiKey();
   if (!apiKey) {
     console.error("Email sending FAILED - BREVO_API_KEY not configured in environment variables");
@@ -80,25 +61,27 @@ async function sendEmail(to: string, subject: string, html: string) {
   try {
     console.log("Attempting to send email to:", to, "with subject:", subject);
 
+    const payload: Record<string, unknown> = {
+      sender: {
+        name: "Abhiraj Courses",
+        email: "abhirajvermen1@gmail.com",
+      },
+      to: [{ email: to }],
+      subject: subject,
+      htmlContent: html,
+    };
+
+    if (attachments && attachments.length > 0) {
+      payload.attachment = attachments;
+    }
+
     const response = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "api-key": apiKey,
       },
-      body: JSON.stringify({
-        sender: {
-          name: "Abhiraj Courses",
-          email: "abhirajvermen1@gmail.com",
-        },
-        to: [
-          {
-            email: to,
-          },
-        ],
-        subject: subject,
-        htmlContent: html,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const result = await response.json();
@@ -107,7 +90,6 @@ async function sendEmail(to: string, subject: string, html: string) {
       console.error("Brevo API error:", JSON.stringify(result, null, 2));
       console.error("Response status:", response.status, response.statusText);
       
-      // Specific error handling for 401 Unauthorized
       if (response.status === 401) {
         return { 
           success: false, 
@@ -306,6 +288,102 @@ function createNewCourseEmailTemplate(course: any) {
   return { subject, html };
 }
 
+export const sendSupportEmail = createServerFn({ method: "POST" })
+  .validator(z.object({
+    name: z.string().min(1),
+    phone: z.string().optional(),
+    email: z.string().email(),
+    courseName: z.string().optional(),
+    issue: z.string().min(1),
+    imageBase64: z.string().optional(), // base64-encoded image data (no data: prefix)
+    imageName: z.string().optional(),   // original filename e.g. "screenshot.png"
+    imageMime: z.string().optional(),   // e.g. "image/png"
+  }))
+  .handler(async ({ data }) => {
+    // Build screenshot note in the email body (actual file goes as attachment)
+    const screenshotNote = data.imageBase64
+      ? `
+        <div class="field">
+          <div class="label">📷 Screenshot</div>
+          <div class="value" style="color:#4338ca;font-weight:600;">📎 Screenshot attached — see email attachment: ${data.imageName || 'screenshot'}</div>
+        </div>`
+      : '';
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>New Support Request</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background: #f3f4f6; margin: 0; padding: 0; }
+          .container { max-width: 640px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 28px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #ffffff; padding: 28px; border-radius: 0 0 10px 10px; border: 1px solid #e5e7eb; }
+          .field { margin-bottom: 16px; }
+          .label { font-weight: bold; color: #374151; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+          .value { margin-top: 4px; padding: 10px 14px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 15px; }
+          .course-badge { display:inline-block; margin-top:4px; padding: 6px 14px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 20px; font-size: 14px; font-weight: 600; color: #4338ca; }
+          .footer { text-align: center; margin-top: 20px; color: #9ca3af; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🆘 New Support Request</h1>
+            <p>A user has reached out via the Help Center</p>
+          </div>
+          <div class="content">
+            <div class="field">
+              <div class="label">Name</div>
+              <div class="value">${data.name}</div>
+            </div>
+            <div class="field">
+              <div class="label">Email</div>
+              <div class="value">${data.email}</div>
+            </div>
+            ${data.phone ? `
+            <div class="field">
+              <div class="label">Phone</div>
+              <div class="value">${data.phone}</div>
+            </div>` : ''}
+            ${data.courseName ? `
+            <div class="field">
+              <div class="label">📚 Course with Issue</div>
+              <div><span class="course-badge">📚 ${data.courseName}</span></div>
+            </div>` : ''}
+            <div class="field">
+              <div class="label">Issue / Message</div>
+              <div class="value" style="white-space:pre-wrap;">${data.issue}</div>
+            </div>
+            ${screenshotNote}
+            <div class="footer">
+              <p>Sent from AbhiAcademy Help Center • ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Build attachments array for Brevo (proper file attachment, not inline base64)
+    const attachments: Array<{ name: string; content: string }> = [];
+    if (data.imageBase64) {
+      attachments.push({
+        name: data.imageName || 'screenshot.png',
+        content: data.imageBase64, // raw base64, no data: prefix
+      });
+    }
+
+    const result = await sendEmail(
+      "va7058060@gmail.com",
+      `[AbhiAcademy Support] ${data.name}${ data.courseName ? ` — ${data.courseName}` : ''} — ${data.issue.slice(0, 50)}`,
+      html,
+      attachments.length > 0 ? attachments : undefined,
+    );
+    return result;
+  });
+
 export const notifySubscribersOfNewCourse = createServerFn({ method: "POST" })
   .validator(z.object({
     courseId: z.string(),
@@ -317,7 +395,7 @@ export const notifySubscribersOfNewCourse = createServerFn({ method: "POST" })
         return { success: false, error: "Course not found" };
       }
       
-      const db = getAdminFirestore();
+      const db = await getAdminFirestore();
       const profilesSnap = await db.collection("userProfiles").where("notificationsEnabled", "==", true).get();
       
       if (profilesSnap.empty) {

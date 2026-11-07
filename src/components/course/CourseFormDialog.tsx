@@ -5,7 +5,7 @@ import { z } from "zod";
 import { Loader2, Upload, Plus, Trash2, FileText, Link as LinkIcon, Gift, Star } from "lucide-react";
 import { uploadToSupabase } from "@/services/storage/supabase-storage";
 import { uploadCoursePdf } from "@/services/storage/supabase-server";
-import { notifySubscribersOfNewCourse } from "@/services/email/brevo";
+import { createNotificationCampaign } from "@/services/notifications/notification-server";
 
 import {
   Dialog,
@@ -306,10 +306,11 @@ export function CourseFormDialog({
         });
         const result = await createCourseClient(cleanCourseData);
         
-        // Notify subscribers if it's a new paid course
+        // Queue notification campaign for new paid course (idempotent, quota-safe)
         if (result.success && !isFree && result.course) {
-          notifySubscribersOfNewCourse({ data: { courseId: result.course.id } })
-            .catch(e => console.error("Notification error:", e));
+          createNotificationCampaign({ data: { courseId: result.course.id } })
+            .then((r) => console.log("[Notification] Campaign queued:", r))
+            .catch((e) => console.error("[Notification] Campaign queue error:", e));
         }
       }
       

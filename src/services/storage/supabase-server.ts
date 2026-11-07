@@ -5,10 +5,9 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
+import { getAdminFirestore } from "@/services/database/admin-firestore";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
 
 // ── Supabase admin client (service role) ──────────────────────────────
 
@@ -29,31 +28,6 @@ function getSupabaseAdmin() {
 
 // ── Firebase Admin (reuse existing init if available) ─────────────────
 
-function getAdminFirestore() {
-  if (getApps().length > 0) {
-    return getFirestore();
-  }
-
-  const privateKey = process.env['FIREBASE_ADMIN_PRIVATE_KEY']?.replace(/\\n/g, "\n");
-  const projectId = process.env['FIREBASE_ADMIN_PROJECT_ID'];
-  const clientEmail = process.env['FIREBASE_ADMIN_CLIENT_EMAIL'];
-
-  if (!privateKey || !projectId || !clientEmail) {
-    throw new Error("Firebase Admin credentials not configured");
-  }
-
-  const app = initializeApp({
-    credential: cert({
-      projectId,
-      privateKey,
-      clientEmail,
-    }),
-  });
-
-  const db = getFirestore(app);
-  try { db.settings({ preferRest: true }); } catch (e) {}
-  return db;
-}
 
 // ── Server function: Upload a course PDF ──────────────────────────────
 
@@ -111,7 +85,7 @@ export const createSignedPdfUrl = createServerFn({ method: "POST" })
     console.log("createSignedPdfUrl: checking access for user", data.userId, "course", data.courseId);
 
     // ── 1. Verify course access in Firestore ──────────────────────
-    const db = getAdminFirestore();
+    const db = await getAdminFirestore();
     const accessRef = db.collection("courseAccess");
     const snapshot = await accessRef
       .where("userId", "==", data.userId)

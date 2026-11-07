@@ -22,10 +22,13 @@ export async function getUserProfile(uid: string): Promise<UserProfile> {
   const snap = await getDoc(docRef);
 
   if (!snap.exists()) {
-    // Default profile if not created yet
+    // Default profile if not created yet.
+    // NOTE: ensureUserProfileExists (server fn) creates the real doc with true on sign-in.
+    // We default to true here so the profile page shows the correct value before the
+    // server document is written.
     return {
       uid,
-      notificationsEnabled: false, // Default to false or true? Let's default to false and let users opt-in.
+      notificationsEnabled: true,
     };
   }
 
@@ -34,6 +37,7 @@ export async function getUserProfile(uid: string): Promise<UserProfile> {
     ...(snap.data() as Omit<UserProfile, "uid">),
   };
 }
+
 
 export async function updateUserNotificationPreference(uid: string, email: string, enabled: boolean): Promise<void> {
   const db = getDbSafe();

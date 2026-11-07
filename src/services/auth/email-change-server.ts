@@ -1,34 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getAdminFirestore, getAdminAuthInstance } from "@/services/database/admin-firestore";
 import { z } from "zod";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-import { getAuth as getAdminAuth } from "firebase-admin/auth";
-
-// --- Firebase Admin SDK Initialization ---
-function getAdminApp() {
-  const apps = getApps();
-  if (apps.length > 0) {
-    return apps[0];
-  }
-  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
-  if (!privateKey || !process.env.FIREBASE_ADMIN_PROJECT_ID || !process.env.FIREBASE_ADMIN_CLIENT_EMAIL) {
-    throw new Error("Firebase Admin credentials not configured");
-  }
-  return initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-      privateKey: privateKey,
-      clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-    }),
-  });
-}
-
-function getAdminFirestore() {
-  const app = getAdminApp();
-  const db = getFirestore(app);
-  try { db.settings({ preferRest: true }); } catch (e) {}
-  return db;
-}
 
 // --- Brevo Email Sender ---
 async function sendOtpEmail(to: string, otp: string) {
@@ -75,7 +47,7 @@ export const requestEmailChangeOtp = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digit OTP
-      const db = getAdminFirestore();
+      const db = await getAdminFirestore();
       
       // Store OTP in Firestore
       await db.collection("emailChangeOtps").doc(data.uid).set({
@@ -102,8 +74,8 @@ export const verifyEmailChangeOtp = createServerFn({ method: "POST" })
   }))
   .handler(async ({ data }) => {
     try {
-      const db = getAdminFirestore();
-      const auth = getAdminAuth(getAdminApp());
+      const db = await getAdminFirestore();
+      const auth = await getAdminAuthInstance();
       
       const otpDoc = await db.collection("emailChangeOtps").doc(data.uid).get();
       if (!otpDoc.exists) {

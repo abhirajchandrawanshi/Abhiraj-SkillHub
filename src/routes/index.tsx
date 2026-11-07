@@ -20,6 +20,14 @@ import {
   Instagram,
   Facebook,
   Send,
+  HelpCircle,
+  ChevronUp,
+  Phone,
+  Mail,
+  User,
+  MessageSquare,
+  ImageIcon,
+  X as XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -32,7 +40,10 @@ import { SpinningBorderButton } from "@/components/ui/spinning-border-button";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { CheckoutDialog } from "@/components/course/CheckoutDialog";
 import { CartDrawer } from "@/components/course/CartDrawer";
+import { ExclusiveOfferBanner } from "@/components/offer/ExclusiveOfferBanner";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { DiwaliBanner } from "@/components/diwali/DiwaliBanner";
+import { DiwaliControlPill } from "@/components/diwali/DiwaliControlPill";
 import { FeedbackCard } from "@/components/ui/feedback-card";
 import { BorderBeamPanel } from "@/components/ui/border-beam-panel";
 import {
@@ -58,6 +69,7 @@ import {
   submitCourseRating,
   submitSuggestion,
 } from "@/services/database/firebase-courses";
+import { sendSupportEmail } from "@/services/email/brevo";
 import { getPublishedCoursesServer, getPrivateCourseAccessInfo } from "@/services/database/public-server";
 import type { Course } from "@/services/database/firebase-courses";
 import { createSignedPdfUrl } from "@/services/storage/supabase-server";
@@ -691,6 +703,31 @@ function Landing() {
   // User Profile State
   const [userName, setUserName] = useState("");
 
+  // Diwali Theme State
+  const [diwaliActive, setDiwaliActive] = useState(true);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("abhiacademy-diwali-theme");
+      if (stored !== null) setDiwaliActive(stored === "true");
+    } catch {
+      // Safe catch
+    }
+  }, []);
+
+  const handleToggleDiwali = () => {
+    const next = !diwaliActive;
+    setDiwaliActive(next);
+    try {
+      localStorage.setItem("abhiacademy-diwali-theme", String(next));
+    } catch {
+      // Safe catch
+    }
+    window.dispatchEvent(
+      new CustomEvent("toggle-diwali-theme", { detail: { active: next } }),
+    );
+  };
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -790,19 +827,21 @@ function Landing() {
   const filteredCourses = applySearch(dynamicCourses);
 
   // Track which nav section is active
-  const [activeSection, setActiveSection] = useState<"home" | "courses" | "about">("home");
+  const [activeSection, setActiveSection] = useState<"home" | "courses" | "help" | "about">("home");
   useEffect(() => {
     const onScroll = () => {
       const about = document.getElementById("about");
       const courses = document.getElementById("courses");
+      const helpcenter = document.getElementById("helpcenter");
       const home = document.getElementById("home");
-      // Use getBoundingClientRect for accurate position regardless of layout
       const aboutTop = about ? about.getBoundingClientRect().top : Infinity;
       const coursesTop = courses ? courses.getBoundingClientRect().top : Infinity;
+      const helpTop = helpcenter ? helpcenter.getBoundingClientRect().top : Infinity;
       const isAtBottom =
         window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 20;
 
       if (isAtBottom || aboutTop <= window.innerHeight - 150) setActiveSection("about");
+      else if (helpTop <= 200) setActiveSection("help");
       else if (coursesTop <= 200) setActiveSection("courses");
       else setActiveSection("home");
     };
@@ -875,6 +914,12 @@ function Landing() {
                 Courses
               </button>
               <button
+                onClick={() => scrollTo("helpcenter")}
+                className={`cursor-pointer ${activeSection === "help" ? "border-b-2 border-foreground pb-1 text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Help Center
+              </button>
+              <button
                 onClick={() => scrollTo("about")}
                 className={`cursor-pointer ${activeSection === "about" ? "border-b-2 border-foreground pb-1 text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}`}
               >
@@ -925,6 +970,11 @@ function Landing() {
                 </span>
               )}
             </button>
+
+            <DiwaliControlPill
+              isActive={diwaliActive}
+              onToggleActive={handleToggleDiwali}
+            />
 
             <ThemeToggle />
             {user ? (
@@ -1003,6 +1053,12 @@ function Landing() {
                   Courses
                 </button>
                 <button
+                  onClick={() => scrollTo("helpcenter")}
+                  className={`text-left px-2 py-1 ${activeSection === "help" ? "text-foreground" : "text-muted-foreground"}`}
+                >
+                  Help Center
+                </button>
+                <button
                   onClick={() => scrollTo("about")}
                   className={`text-left px-2 py-1 ${activeSection === "about" ? "text-foreground" : "text-muted-foreground"}`}
                 >
@@ -1014,7 +1070,12 @@ function Landing() {
 
               {/* Mobile Footer Actions */}
               <div className="flex items-center justify-between px-2">
-                <ThemeToggle />
+                <DiwaliControlPill
+              isActive={diwaliActive}
+              onToggleActive={handleToggleDiwali}
+            />
+
+            <ThemeToggle />
                 <div className="flex items-center gap-4">
                   <button
                     className="text-foreground relative p-2"
@@ -1062,8 +1123,16 @@ function Landing() {
       <main id="top">
         {/* Hero Section */}
         <section id="home" className="relative overflow-hidden">
-          <div className="mx-auto max-w-[1400px] px-6 relative w-full pt-20 pb-20 md:pt-32 md:pb-32">
-            <div className="flex flex-col items-center text-center gap-10 md:gap-16">
+          <div className="mx-auto max-w-[1400px] px-6 relative w-full pt-8 pb-16 md:pt-12 md:pb-28">
+            <div className="flex flex-col items-center text-center gap-6 md:gap-10">
+              {/* Exclusive Offer Banner placed in rectangle format between Navbar and Learn. Build. Grow. */}
+              <div className="w-full flex justify-center">
+                <ExclusiveOfferBanner
+                  allCourses={coursesData?.courses ?? []}
+                  onOpenCart={() => setCartDrawerOpen(true)}
+                />
+              </div>
+
               {/* Heading */}
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
@@ -1088,6 +1157,13 @@ function Landing() {
                     </span>
                   </h1>
                 </div>
+
+                {/* Diwali Festive Greeting Banner matching reference design */}
+                {diwaliActive && (
+                  <div className="mt-8 flex justify-center">
+                    <DiwaliBanner />
+                  </div>
+                )}
               </motion.div>
             </div>
           </div>
@@ -1335,13 +1411,15 @@ function Landing() {
                 toast.success("Thank you for your feedback!");
               } catch (err) {
                 console.error("Feedback error:", err);
-                // Fallback to still show success for local testing / unauthenticated users
                 toast.success("Thank you for your feedback!");
               }
             }}
           />
         </div>
       </section>
+
+      {/* ── Help Center ── */}
+      <HelpCenterSection />
 
       <footer id="about" className="border-t border-border/30 pt-16 pb-14">
         <div className="mx-auto max-w-[1400px] px-6">
@@ -1456,5 +1534,398 @@ function Landing() {
         />
       )}
     </KineticGrid>
+  );
+}
+
+// ─── FAQ data ─────────────────────────────────────────────────────────────────
+const FAQ_ITEMS = [
+  {
+    q: "I made a payment but I did not receive the course / resources.",
+    a: "Don't worry! Sometimes payments get processed but the confirmation step fails. In most cases your payment was either not captured or will be auto-refunded within 5–7 business days. Please contact our team below with your transaction ID and email so we can verify and resolve it promptly.",
+  },
+  {
+    q: "My payment failed but the amount was deducted from my account.",
+    a: "Failed payments are fully refunded by your bank or payment provider within 5–7 business days, depending on your bank's policy. If the amount is not credited after 7 days, please reach out to us with your bank statement screenshot and we will assist you.",
+  },
+  {
+    q: "Can I get a refund after purchasing a course?",
+    a: "We offer a refund within 48 hours of purchase if you have not accessed the course material. After 48 hours or once the content has been accessed, refunds are not applicable. Contact our team within the eligible window and we'll process it promptly.",
+  },
+  {
+    q: "I purchased the course but I cannot see it on my profile.",
+    a: "Please log out and log back in — your access is usually synced within a few minutes of payment confirmation. If the course still does not appear after 30 minutes, please contact us with your payment receipt and registered email.",
+  },
+  {
+    q: "How do I access the course PDF or resource links?",
+    a: "After purchasing, click the \"Access Course\" button on the course card. If your course includes a PDF, it will open directly. For video resources or external links, you will be redirected automatically. Make sure you are logged in with the same email used during purchase.",
+  },
+  {
+    q: "I forgot my password. How do I reset it?",
+    a: "On the login page, click \"Forgot Password\" and enter your registered email. You will receive a password-reset link within a few minutes. Check your spam/junk folder if you don't see it in your inbox.",
+  },
+  {
+    q: "Is my personal and payment information secure?",
+    a: "Yes. We use industry-standard encryption and we never store your card details. All payments are processed through trusted payment gateways (Razorpay / UPI). Your personal data is handled in accordance with our privacy policy.",
+  },
+];
+
+// ─── HelpCenterSection component ──────────────────────────────────────────────
+function HelpCenterSection() {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [form, setForm] = useState({ name: "", phone: "", email: "", courseName: "", issue: "" });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const toggle = (i: number) => setOpenIndex(openIndex === i ? null : i);
+
+  // Convert selected file → base64 and set preview
+  const handleImageChange = (file: File | null) => {
+    if (!file) {
+      setImageFile(null);
+      setImagePreview(null);
+      return;
+    }
+    const maxMB = 5;
+    if (file.size > maxMB * 1024 * 1024) {
+      toast.error(`Image must be smaller than ${maxMB} MB.`);
+      return;
+    }
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setImagePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.email.trim() || !form.issue.trim()) {
+      toast.error("Please fill in all required fields.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      // Extract base64 string from dataURL (strip the "data:image/xxx;base64," prefix)
+      let imageBase64: string | undefined;
+      let imageMime: string | undefined;
+      let imageName: string | undefined;
+      if (imageFile && imagePreview) {
+        const parts = imagePreview.split(",");
+        imageBase64 = parts[1]; // raw base64
+        imageMime = imageFile.type || "image/png";
+        imageName = imageFile.name;
+      }
+
+      const result = await sendSupportEmail({
+        data: {
+          name: form.name.trim(),
+          phone: form.phone.trim() || undefined,
+          email: form.email.trim(),
+          courseName: form.courseName.trim() || undefined,
+          issue: form.issue.trim(),
+          imageBase64,
+          imageMime,
+          imageName,
+        },
+      });
+      if (result.success) {
+        setSubmitted(true);
+        setForm({ name: "", phone: "", email: "", courseName: "", issue: "" });
+        setImageFile(null);
+        setImagePreview(null);
+        toast.success("Your message has been sent! We'll get back to you soon.");
+      } else {
+        toast.error("Failed to send message. Please try again or email us directly.");
+      }
+    } catch {
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section
+      id="helpcenter"
+      className="border-t border-border/30 py-20 px-6"
+    >
+      <div className="mx-auto max-w-[860px]">
+        {/* ── Header ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="text-center mb-14"
+        >
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-sm font-semibold text-primary mb-5">
+            <HelpCircle className="h-4 w-4" />
+            Help Center
+          </div>
+          <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight mb-3">
+            Frequently Asked{" "}
+            <span className="bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 bg-clip-text text-transparent">
+              Questions
+            </span>
+          </h2>
+          <p className="text-muted-foreground text-base max-w-xl mx-auto">
+            Can't find an answer? Scroll down and contact our team directly — we respond within 24 hours.
+          </p>
+        </motion.div>
+
+        {/* ── FAQ Accordion ── */}
+        <div className="flex flex-col gap-3 mb-16">
+          {FAQ_ITEMS.map((item, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.35, delay: i * 0.05 }}
+              className={`rounded-2xl border transition-all duration-300 overflow-hidden ${
+                openIndex === i
+                  ? "border-primary/40 bg-primary/5 shadow-md shadow-primary/10"
+                  : "border-border/50 bg-card hover:border-primary/20 hover:bg-secondary/30"
+              }`}
+            >
+              <button
+                onClick={() => toggle(i)}
+                className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left"
+                id={`faq-${i}`}
+              >
+                <span className="font-semibold text-base text-foreground leading-snug">
+                  {item.q}
+                </span>
+                <span className="shrink-0">
+                  {openIndex === i ? (
+                    <ChevronUp className="h-5 w-5 text-primary" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </span>
+              </button>
+              <AnimatePresence initial={false}>
+                {openIndex === i && (
+                  <motion.div
+                    key="content"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.28, ease: "easeInOut" }}
+                    className="overflow-hidden"
+                  >
+                    <p className="px-6 pb-5 text-sm sm:text-base text-muted-foreground leading-relaxed border-t border-border/30 pt-4">
+                      {item.a}
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* ── Contact Our Team ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="rounded-3xl border border-border/50 bg-card shadow-xl overflow-hidden"
+        >
+          {/* Card header */}
+          <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 px-8 py-8 text-white text-center">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <MessageSquare className="h-6 w-6" />
+              <h3 className="font-display text-2xl font-bold">Contact Our Team</h3>
+            </div>
+            <p className="text-white/80 text-sm">
+              Still have an issue? Describe it below and we'll get back to you within 24 hours.
+            </p>
+          </div>
+
+          <div className="p-8">
+            {submitted ? (
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="flex flex-col items-center justify-center gap-4 py-8 text-center"
+              >
+                <div className="h-16 w-16 rounded-full bg-green-500/15 flex items-center justify-center">
+                  <Check className="h-8 w-8 text-green-500" />
+                </div>
+                <h4 className="font-display text-xl font-bold text-foreground">Message Sent!</h4>
+                <p className="text-muted-foreground text-sm max-w-xs">
+                  We've received your message and will respond to <strong>{form.email || "your email"}</strong> within 24 hours.
+                </p>
+                <button
+                  onClick={() => setSubmitted(false)}
+                  className="mt-2 text-sm text-primary hover:underline"
+                >
+                  Send another message
+                </button>
+              </motion.div>
+            ) : (
+              <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {/* Name */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="support-name" className="text-sm font-semibold flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5" />
+                      Full Name <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="support-name"
+                      type="text"
+                      placeholder="Your name"
+                      value={form.name}
+                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                      required
+                      className="rounded-xl"
+                    />
+                  </div>
+
+                  {/* Phone */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="support-phone" className="text-sm font-semibold flex items-center gap-1.5">
+                      <Phone className="h-3.5 w-3.5" />
+                      Phone Number <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+                    </Label>
+                    <Input
+                      id="support-phone"
+                      type="tel"
+                      placeholder="+91 XXXXX XXXXX"
+                      value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                      className="rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                {/* Email */}
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="support-email" className="text-sm font-semibold flex items-center gap-1.5">
+                    <Mail className="h-3.5 w-3.5" />
+                    Email Address <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="support-email"
+                    type="email"
+                    placeholder="your@email.com"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    required
+                    className="rounded-xl"
+                  />
+                </div>
+
+                {/* Course Name */}
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="support-course" className="text-sm font-semibold flex items-center gap-1.5">
+                    📚 Which course had the issue?
+                    <span className="text-muted-foreground text-xs font-normal">(write exact name)</span>
+                  </Label>
+                  <Input
+                    id="support-course"
+                    type="text"
+                    placeholder="E.g. React Masterclass, Python for Beginners..."
+                    value={form.courseName}
+                    onChange={(e) => setForm({ ...form, courseName: e.target.value })}
+                    className="rounded-xl"
+                  />
+                </div>
+
+                {/* Issue */}
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="support-issue" className="text-sm font-semibold flex items-center gap-1.5">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    Describe Your Issue <span className="text-red-500">*</span>
+                  </Label>
+                  <textarea
+                    id="support-issue"
+                    placeholder="E.g. I paid ₹999 for the course on 20 Oct 2026 via UPI but never received access. My transaction ID is XXXXXX..."
+                    value={form.issue}
+                    onChange={(e) => setForm({ ...form, issue: e.target.value })}
+                    required
+                    rows={5}
+                    className="rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y min-h-[120px] transition-all"
+                  />
+                </div>
+
+                {/* Screenshot / Image Upload */}
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-sm font-semibold flex items-center gap-1.5">
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    Attach a Screenshot <span className="text-muted-foreground text-xs font-normal">(optional, max 5 MB)</span>
+                  </Label>
+
+                  {imagePreview ? (
+                    <div className="relative rounded-xl overflow-hidden border border-border/60 bg-secondary/30">
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="w-full max-h-64 object-contain"
+                      />
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors"
+                        title="Remove image"
+                      >
+                        <XIcon className="h-4 w-4" />
+                      </button>
+                      <div className="px-4 py-2 text-xs text-muted-foreground truncate">
+                        {imageFile?.name}
+                      </div>
+                    </div>
+                  ) : (
+                    <label
+                      htmlFor="support-screenshot"
+                      className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-secondary/20 px-6 py-8 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const f = e.dataTransfer.files?.[0];
+                        if (f && f.type.startsWith("image/")) handleImageChange(f);
+                      }}
+                    >
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                        <ImageIcon className="h-5 w-5 text-primary" />
+                      </div>
+                      <span className="text-sm font-medium text-foreground">Click or drag & drop an image here</span>
+                      <span className="text-xs text-muted-foreground">PNG, JPG, GIF, WebP — max 5 MB</span>
+                      <input
+                        id="support-screenshot"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleImageChange(e.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full sm:w-auto sm:self-end flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 px-8 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-500/30 hover:opacity-90 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {submitting ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Sending...</>
+                  ) : (
+                    <><Send className="h-4 w-4" /> Send Message</>
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    </section>
   );
 }
