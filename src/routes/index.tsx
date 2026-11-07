@@ -28,6 +28,9 @@ import {
   MessageSquare,
   ImageIcon,
   X as XIcon,
+  Home,
+  BookOpen,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -995,125 +998,220 @@ function Landing() {
             )}
           </div>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
+          {/* Mobile Right Controls: Prominent Menu + Direct Cart Access */}
+          <div className="flex items-center gap-2 md:hidden">
+            {/* Direct Mobile Cart Button */}
+            <button
+              onClick={() => setCartDrawerOpen(true)}
+              className="relative flex items-center justify-center p-2.5 rounded-xl bg-secondary/80 border border-border/50 text-foreground hover:bg-secondary active:scale-95 transition-all shadow-sm"
+              title="View Cart"
+              aria-label="View Cart"
+            >
+              <ShoppingCart className="h-5 w-5" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-primary text-primary-foreground text-[11px] font-black flex items-center justify-center shadow-md">
+                  {cartCount}
+                </span>
+              )}
+            </button>
+
+            {/* Highly Prominent & Highlighted Mobile Menu Button */}
+            <button
+              onClick={() => setMenuOpen((open) => !open)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95 ${
+                menuOpen
+                  ? "bg-primary text-primary-foreground shadow-primary/30 ring-2 ring-primary/40"
+                  : "bg-gradient-to-r from-primary/15 via-amber-500/15 to-primary/15 text-foreground border-2 border-primary/40 hover:border-primary shadow-primary/10"
+              }`}
+              aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+            >
+              {menuOpen ? (
+                <>
+                  <X className="h-4 w-4 stroke-[3]" />
+                  <span>Close</span>
+                </>
+              ) : (
+                <>
+                  <Menu className="h-4 w-4 text-primary stroke-[3]" />
+                  <span className="font-extrabold text-foreground">Menu</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Mobile Menu */}
+      {/* Mobile Menu Dropdown (Rich, high-contrast & phone-friendly) */}
       <AnimatePresence>
         {menuOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="md:hidden sticky top-[73px] z-40 border-b border-border/20 backdrop-blur-xl"
-            style={{ background: isDark ? "rgba(22,22,24,0.95)" : "rgba(248,249,251,0.95)" }}
+            initial={{ opacity: 0, y: -8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="md:hidden border-b border-border/40 bg-card/98 backdrop-blur-2xl shadow-2xl relative z-40"
           >
-            <div className="flex flex-col p-6 gap-6">
+            <div className="flex flex-col p-4 sm:p-5 gap-4 max-h-[85vh] overflow-y-auto">
               {/* Mobile Search */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Search courses..."
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
                   onKeyDown={(e) => e.key === "Escape" && clearSearch()}
-                  className="h-12 w-full rounded-xl bg-secondary pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+                  className="h-12 w-full rounded-xl bg-secondary/80 pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground border border-border/60 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                 />
                 {searchQuery && (
                   <button
                     onClick={clearSearch}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                    aria-label="Clear search"
                   >
                     <X className="h-4 w-4" />
                   </button>
                 )}
               </div>
 
-              {/* Mobile Nav Links */}
-              <nav className="flex flex-col gap-4 text-base font-semibold">
+              {/* Large, Finger-Friendly Navigation Cards */}
+              <nav className="flex flex-col gap-2">
                 <button
-                  onClick={() => scrollTo("home")}
-                  className={`text-left px-2 py-1 ${activeSection === "home" ? "text-foreground" : "text-muted-foreground"}`}
+                  onClick={() => {
+                    scrollTo("home");
+                    setMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between p-3.5 rounded-xl text-left transition-all font-bold text-sm ${
+                    activeSection === "home"
+                      ? "bg-primary/15 text-primary border border-primary/30"
+                      : "bg-secondary/40 hover:bg-secondary text-foreground/90 border border-border/40"
+                  }`}
                 >
-                  Home
+                  <span className="flex items-center gap-3">
+                    <span className="p-2 rounded-lg bg-primary/10 text-primary">
+                      <Home className="h-4 w-4" />
+                    </span>
+                    <span>Home</span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground/60" />
                 </button>
+
                 <button
-                  onClick={() => scrollTo("courses")}
-                  className={`text-left px-2 py-1 ${activeSection === "courses" ? "text-foreground" : "text-muted-foreground"}`}
+                  onClick={() => {
+                    scrollTo("courses");
+                    setMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between p-3.5 rounded-xl text-left transition-all font-bold text-sm ${
+                    activeSection === "courses"
+                      ? "bg-primary/15 text-primary border border-primary/30"
+                      : "bg-secondary/40 hover:bg-secondary text-foreground/90 border border-border/40"
+                  }`}
                 >
-                  Courses
+                  <span className="flex items-center gap-3">
+                    <span className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
+                      <BookOpen className="h-4 w-4" />
+                    </span>
+                    <span>Courses</span>
+                  </span>
+                  <span className="text-xs font-extrabold bg-amber-500/15 text-amber-500 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+                    Explore
+                  </span>
                 </button>
+
                 <button
-                  onClick={() => scrollTo("helpcenter")}
-                  className={`text-left px-2 py-1 ${activeSection === "help" ? "text-foreground" : "text-muted-foreground"}`}
+                  onClick={() => {
+                    scrollTo("helpcenter");
+                    setMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between p-3.5 rounded-xl text-left transition-all font-bold text-sm ${
+                    activeSection === "help"
+                      ? "bg-primary/15 text-primary border border-primary/30"
+                      : "bg-secondary/40 hover:bg-secondary text-foreground/90 border border-border/40"
+                  }`}
                 >
-                  Help Center
+                  <span className="flex items-center gap-3">
+                    <span className="p-2 rounded-lg bg-blue-500/10 text-blue-500">
+                      <HelpCircle className="h-4 w-4" />
+                    </span>
+                    <span>Help Center</span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground/60" />
                 </button>
+
                 <button
-                  onClick={() => scrollTo("about")}
-                  className={`text-left px-2 py-1 ${activeSection === "about" ? "text-foreground" : "text-muted-foreground"}`}
+                  onClick={() => {
+                    scrollTo("about");
+                    setMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between p-3.5 rounded-xl text-left transition-all font-bold text-sm ${
+                    activeSection === "about"
+                      ? "bg-primary/15 text-primary border border-primary/30"
+                      : "bg-secondary/40 hover:bg-secondary text-foreground/90 border border-border/40"
+                  }`}
                 >
-                  About
+                  <span className="flex items-center gap-3">
+                    <span className="p-2 rounded-lg bg-purple-500/10 text-purple-500">
+                      <Info className="h-4 w-4" />
+                    </span>
+                    <span>About Us</span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground/60" />
                 </button>
               </nav>
 
-              <div className="h-px bg-border/50 w-full" />
+              <div className="h-px bg-border/60 w-full my-1" />
 
-              {/* Mobile Footer Actions */}
-              <div className="flex items-center justify-between px-2">
-                <DiwaliControlPill
-              isActive={diwaliActive}
-              onToggleActive={handleToggleDiwali}
-            />
-
-            <ThemeToggle />
-                <div className="flex items-center gap-4">
-                  <button
-                    className="text-foreground relative p-2"
+              {/* User Account Section on Phone */}
+              {user ? (
+                <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/50">
+                  <div
+                    className="flex items-center gap-3 cursor-pointer"
                     onClick={() => {
-                      setCartDrawerOpen(true);
+                      void navigate({ to: "/profile" });
                       setMenuOpen(false);
                     }}
                   >
-                    <ShoppingCart className="h-6 w-6" />
-                    {cartCount > 0 && (
-                      <span className="absolute 1 top-0 right-0 h-5 w-5 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">
-                        {cartCount}
-                      </span>
-                    )}
-                  </button>
+                    <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground font-black text-sm flex items-center justify-center shadow-md">
+                      {userName ? userName.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : "U")}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-foreground truncate">
+                        {userName || user.email?.split("@")[0]}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground font-medium">View Profile →</p>
+                    </div>
+                  </div>
 
-                  {user ? (
-                    <button
-                      onClick={() => {
-                        void signOutUser();
-                        setMenuOpen(false);
-                      }}
-                      className="text-muted-foreground hover:text-foreground flex items-center gap-2 font-medium"
-                    >
-                      <LogOut className="h-5 w-5" /> Logout
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        void navigate({ to: "/login" });
-                        setMenuOpen(false);
-                      }}
-                      className="text-muted-foreground hover:text-foreground flex items-center gap-2 font-medium"
-                    >
-                      <LockKeyhole className="h-5 w-5" /> Login
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      void signOutUser();
+                      setMenuOpen(false);
+                    }}
+                    className="text-xs font-bold text-destructive hover:bg-destructive/10 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                  >
+                    <LogOut className="h-3.5 w-3.5" /> Logout
+                  </button>
                 </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    void navigate({ to: "/login" });
+                    setMenuOpen(false);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 py-3 text-sm font-black text-black shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+                >
+                  <LockKeyhole className="h-4 w-4" />
+                  <span>Login / Sign In</span>
+                </button>
+              )}
+
+              {/* Bottom Quick Controls (Diwali & Theme) */}
+              <div className="flex items-center justify-between pt-1">
+                <DiwaliControlPill
+                  isActive={diwaliActive}
+                  onToggleActive={handleToggleDiwali}
+                />
+                <ThemeToggle />
               </div>
             </div>
           </motion.div>
