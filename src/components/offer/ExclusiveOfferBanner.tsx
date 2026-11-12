@@ -1,15 +1,89 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Sparkles, ShoppingCart, ArrowRight, Lock, Percent } from "lucide-react";
+import { Sparkles, ShoppingCart, ArrowRight, Lock, Percent, CheckCircle2, ChevronDown } from "lucide-react";
 import { getActiveBannerOffer, type BundleOffer } from "@/lib/bundle-offers";
 import { useCart } from "@/features/cart/use-cart";
+import { useAuth } from "@/features/auth/use-auth";
+import { hasCourseAccess } from "@/services/access/access";
+import { checkFirestoreAccess } from "@/services/access/access";
 import type { Course } from "@/services/database/firebase-courses";
 
 interface ExclusiveOfferBannerProps {
   allCourses: Course[];
   onOpenCart: () => void;
   className?: string;
+}
+
+/**
+ * Hook to check if user has access to ALL courses in a bundle.
+ * Returns { allAccessed, accessedIds, loading }
+ */
+function useBundleAccessCheck(courseIds: string[]) {
+  const { user, loading: authLoading } = useAuth();
+  const [accessedIds, setAccessedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (authLoading || courseIds.length === 0) {
+      setLoading(authLoading);
+      return;
+    }
+
+    let cancelled = false;
+
+    const checkAll = async () => {
+      setLoading(true);
+      const accessed = new Set<string>();
+
+      for (const courseId of courseIds) {
+        // Check localStorage first (fast)
+        if (hasCourseAccess(courseId)) {
+          accessed.add(courseId);
+          continue;
+        }
+        // Check Firestore for logged-in users
+        if (user?.uid) {
+          try {
+            const result = await checkFirestoreAccess(user.uid, courseId);
+            if (result) accessed.add(courseId);
+          } catch {
+            // ignore
+          }
+        }
+      }
+
+      if (!cancelled) {
+        setAccessedIds(accessed);
+        setLoading(false);
+      }
+    };
+
+    checkAll();
+    return () => { cancelled = true; };
+  }, [courseIds.join(","), user?.uid, authLoading]);
+
+  // Listen for access change events
+  useEffect(() => {
+    if (courseIds.length === 0) return;
+
+    const handlers: Array<() => void> = [];
+    for (const courseId of courseIds) {
+      const event = `course-access-changed-${courseId}`;
+      const handler = () => {
+        if (hasCourseAccess(courseId)) {
+          setAccessedIds((prev) => new Set([...prev, courseId]));
+        }
+      };
+      window.addEventListener(event, handler);
+      handlers.push(() => window.removeEventListener(event, handler));
+    }
+    return () => handlers.forEach((h) => h());
+  }, [courseIds.join(",")]);
+
+  const allAccessed = courseIds.length > 0 && courseIds.every((id) => accessedIds.has(id));
+
+  return { allAccessed, accessedIds, loading };
 }
 
 export function ExclusiveOfferBanner({
@@ -30,8 +104,79 @@ export function ExclusiveOfferBanner({
     return allCourses.filter((c) => offer.courseIds.includes(c.id));
   }, [offer, allCourses]);
 
+  const bundleCourseIds = useMemo(
+    () => bundledCourses.map((c) => c.id),
+    [bundledCourses]
+  );
+
+  const { allAccessed, loading: accessLoading } = useBundleAccessCheck(bundleCourseIds);
+
   if (!offer || !offer.active || bundledCourses.length === 0) {
     return null;
+  }
+
+  // ── User already owns ALL bundle courses → show congratulations, hide the offer ──
+  if (allAccessed && !accessLoading) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className={`w-full max-w-4xl mx-auto ${className}`}
+      >
+        <div className="relative overflow-hidden rounded-2xl border-2 border-green-500/50 bg-gradient-to-r from-green-500/10 via-emerald-500/5 to-green-500/10 shadow-lg shadow-green-500/10 p-1">
+          <div className="rounded-2xl bg-card/95 backdrop-blur-md p-6 sm:p-8">
+            {/* Success Icon + Heading */}
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="flex items-center justify-center h-16 w-16 rounded-full bg-green-500/15 border-2 border-green-500/30">
+                <CheckCircle2 className="h-8 w-8 text-green-500" />
+              </div>
+
+              <div className="space-y-2 max-w-lg">
+                <h3 className="font-display text-xl sm:text-2xl font-extrabold text-foreground tracking-tight">
+                  🎉 Congratulations! Bundle Unlocked
+                </h3>
+                <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+                  You have accessed all{" "}
+                  <strong className="text-green-600 dark:text-green-400">
+                    {bundledCourses.length} courses
+                  </strong>{" "}
+                  from this bundle. Scroll down to see your unlocked courses — look for the{" "}
+                  <span className="inline-flex items-center gap-1 bg-green-600 text-white text-xs font-bold px-2 py-0.5 rounded">
+                    Access Course
+                  </span>{" "}
+                  button on each one.
+                </p>
+              </div>
+
+              {/* Course chips */}
+              <div className="flex flex-wrap justify-center gap-2 pt-2">
+                {bundledCourses.map((course) => (
+                  <span
+                    key={course.id}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 border border-green-500/30 px-3 py-1 text-xs font-semibold text-green-600 dark:text-green-400"
+                  >
+                    <CheckCircle2 className="h-3 w-3" />
+                    {course.title}
+                  </span>
+                ))}
+              </div>
+
+              {/* Scroll hint */}
+              <button
+                onClick={() => {
+                  document.getElementById("courses")?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="mt-2 flex items-center gap-2 rounded-xl bg-green-600 hover:bg-green-700 text-white px-6 py-3 text-sm sm:text-base font-bold shadow-lg shadow-green-500/20 transition-all hover:scale-105 active:scale-95"
+              >
+                <span>Access Your Courses</span>
+                <ChevronDown className="h-4 w-4 animate-bounce" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    );
   }
 
   const individualTotal = bundledCourses.reduce((sum, c) => sum + (c.price || 0), 0);

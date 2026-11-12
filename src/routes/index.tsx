@@ -31,6 +31,7 @@ import {
   Home,
   BookOpen,
   Info,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -63,7 +64,8 @@ import { useTheme } from "@/hooks/use-theme";
 import { useCart, CartProvider } from "@/features/cart/use-cart";
 import { useDynamicCourseAccess } from "@/features/courses/use-dynamic-course-access";
 import type { CourseAccess } from "@/services/access/access";
-import { readCourseAccess } from "@/services/access/access";
+import { readCourseAccess, hasCourseAccess } from "@/services/access/access";
+import { getActiveBannerOffer } from "@/lib/bundle-offers";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getUserProfile, updateUserNotificationPreference, updateUserProfileName } from "@/services/database/user-profile";
@@ -805,7 +807,58 @@ function Landing() {
 
   // Split into free (price === 0) and exclusive (price > 0)
   const freeCourses = dynamicCourses.filter((c) => c.price === 0 || c.isFree === true);
-  const exclusiveCourses = dynamicCourses.filter((c) => c.price > 0 && c.isFree !== true);
+  const exclusiveCoursesUnsorted = dynamicCourses.filter((c) => c.price > 0 && c.isFree !== true);
+
+  // Fetch the active banner offer to know which courses are part of the bundle
+  const { data: bannerOffer } = useQuery({
+    queryKey: ["active-banner-offer-landing"],
+    queryFn: getActiveBannerOffer,
+    staleTime: 60 * 1000,
+  });
+
+  // Track which exclusive courses the user has access to (for sorting accessed first)
+  const [accessedCourseIds, setAccessedCourseIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (exclusiveCoursesUnsorted.length === 0) return;
+    const accessed = new Set<string>();
+    for (const c of exclusiveCoursesUnsorted) {
+      if (hasCourseAccess(c.id)) {
+        accessed.add(c.id);
+      }
+    }
+    setAccessedCourseIds(accessed);
+
+    // Listen for access changes on each course
+    const handlers: Array<() => void> = [];
+    for (const c of exclusiveCoursesUnsorted) {
+      const event = `course-access-changed-${c.id}`;
+      const handler = () => {
+        if (hasCourseAccess(c.id)) {
+          setAccessedCourseIds((prev) => new Set([...prev, c.id]));
+        }
+      };
+      window.addEventListener(event, handler);
+      handlers.push(() => window.removeEventListener(event, handler));
+    }
+    return () => handlers.forEach((h) => h());
+  }, [exclusiveCoursesUnsorted.map((c) => c.id).join(",")]);
+
+  // Sort: accessed courses first, then the rest
+  const exclusiveCourses = [...exclusiveCoursesUnsorted].sort((a, b) => {
+    const aAccessed = accessedCourseIds.has(a.id) ? 1 : 0;
+    const bAccessed = accessedCourseIds.has(b.id) ? 1 : 0;
+    return bAccessed - aAccessed; // accessed first
+  });
+
+  // Check if user has accessed all courses in the active bundle offer
+  const bundleCourseIds = bannerOffer?.courseIds ?? [];
+  const allBundleCoursesAccessed =
+    bundleCourseIds.length > 0 &&
+    bundleCourseIds.every((id) => accessedCourseIds.has(id));
+  const accessedBundleCourses = allBundleCoursesAccessed
+    ? exclusiveCourses.filter((c) => bundleCourseIds.includes(c.id))
+    : [];
 
   // Apply search filter
   const applySearch = (courses: typeof dynamicCourses) =>
@@ -1438,6 +1491,34 @@ function Landing() {
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.25 }}
                   >
+                    {/* Bundle Unlocked Congratulations Banner */}
+                    {allBundleCoursesAccessed && accessedBundleCourses.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4 }}
+                        className="mb-8 rounded-2xl border-2 border-green-500/40 bg-gradient-to-r from-green-500/10 via-emerald-500/5 to-green-500/10 p-5 sm:p-6"
+                      >
+                        <div className="flex items-start gap-3 sm:gap-4">
+                          <div className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-green-500/15 border border-green-500/30 flex-shrink-0">
+                            <CheckCircle2 className="h-5 w-5 sm:h-6 sm:w-6 text-green-500" />
+                          </div>
+                          <div className="space-y-1.5 min-w-0">
+                            <h3 className="font-display text-base sm:text-lg font-extrabold text-green-700 dark:text-green-400">
+                              🎉 You accessed all {accessedBundleCourses.length} courses in the bundle — Congratulations!
+                            </h3>
+                            <p className="text-sm text-muted-foreground leading-relaxed">
+                              Click on the{" "}
+                              <span className="inline-flex items-center gap-1 bg-green-600 text-white text-[11px] font-bold px-1.5 py-0.5 rounded">
+                                Access Course
+                              </span>{" "}
+                              button below to open each course.
+                            </p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
                     {/* Exclusive Courses Section Header */}
                     <div className="flex items-center gap-3 mb-6">
                       <div className="h-8 w-1 rounded-full bg-gradient-to-b from-amber-400 to-orange-500" />
