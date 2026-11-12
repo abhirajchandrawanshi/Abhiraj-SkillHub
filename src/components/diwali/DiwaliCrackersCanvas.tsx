@@ -481,16 +481,23 @@ export const DiwaliCrackersCanvas = memo(function DiwaliCrackersCanvas({
 
     nextAutoLaunchRef.current = performance.now() + 600;
 
-    // Interactive launch on click anywhere
+    // Interactive launch on click anywhere (safe against triggering on UI controls)
     const handleDocumentClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.closest("button") ||
-          target.closest("a"))
+        !target ||
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.closest("button") ||
+        target.closest("a") ||
+        target.closest("[role='button']") ||
+        target.closest("[role='dialog']") ||
+        target.closest("[role='menu']") ||
+        target.closest("[role='tab']") ||
+        target.closest("aside") ||
+        target.closest(".dialog-content") ||
+        target.closest("[data-radix-popper-content-wrapper]")
       ) {
         return;
       }
@@ -993,6 +1000,14 @@ export const DiwaliCrackersCanvas = memo(function DiwaliCrackersCanvas({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       lastFrameTimeRef.current = 0;
+      rocketsRef.current = [];
+      raysRef.current = [];
+      fountainSparksRef.current = [];
+      subSparklesRef.current = [];
+      flashesRef.current = [];
+      if (canvas && ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
     };
   }, [enabled]);
 

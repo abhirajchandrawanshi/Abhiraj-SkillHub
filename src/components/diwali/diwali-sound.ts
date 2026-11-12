@@ -36,7 +36,14 @@ class DiwaliSoundManager {
   }
 
   private initCtx() {
-    if (!this.ctx && typeof window !== "undefined") {
+    if (typeof window === "undefined") return;
+
+    // If context was closed by the browser/system, reset it
+    if (this.ctx && this.ctx.state === "closed") {
+      this.ctx = null;
+    }
+
+    if (!this.ctx) {
       const AudioCtx =
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;

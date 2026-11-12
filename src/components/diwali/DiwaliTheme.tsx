@@ -37,13 +37,13 @@ function TopSoundToggle() {
 
   return (
     <aside
-      className="fixed top-2.5 sm:top-3.5 left-1/2 -translate-x-1/2 z-[60] pointer-events-auto select-none"
+      className="fixed top-3 sm:top-3.5 left-1/2 -translate-x-1/2 z-[45] pointer-events-auto select-none"
       aria-label="Festival sound controller"
     >
       <button
         onClick={toggleSound}
         type="button"
-        className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all duration-300 shadow-md backdrop-blur-md cursor-pointer border ${
+        className={`group flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-bold transition-all duration-300 shadow-md backdrop-blur-md cursor-pointer border ${
           !isMuted
             ? "bg-amber-500/25 hover:bg-amber-500/35 text-amber-300 border-amber-500/40 shadow-amber-500/20"
             : "bg-black/60 hover:bg-black/80 text-muted-foreground border-white/15"
@@ -59,7 +59,8 @@ function TopSoundToggle() {
           )}
         </span>
         <span className="tracking-wide">
-          Voice: {!isMuted ? "ON" : "OFF"}
+          <span className="hidden sm:inline">Voice: </span>
+          {!isMuted ? "ON" : "OFF"}
         </span>
       </button>
     </aside>

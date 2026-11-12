@@ -106,5 +106,10 @@ service cloud.firestore {
     match /emailDailyUsage/{dateId} {
       allow read, write: if false; // Server-only (Admin SDK)
     }
+
+    // Email change OTPs — server-only
+    match /emailChangeOtps/{uid} {
+      allow read, write: if false; // Server-only (Admin SDK)
+    }
   }
 }

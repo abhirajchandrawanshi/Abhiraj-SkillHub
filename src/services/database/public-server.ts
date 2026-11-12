@@ -106,24 +106,58 @@ export const getPrivateCourseAccessInfo = createServerFn({ method: "POST" })
 
     // 2. Verify Access if not free
     if (!isFreeCourse) {
-      // Check user purchases collection
-      const purchaseRef = db.collection("users")
-        .doc(data.userId)
-        .collection("purchases")
-        .doc(data.courseId);
-        
-      const purchaseSnap = await purchaseRef.get();
-
-      // Check legacy course_access collection
-      const legacyAccessRef = db.collection("course_access")
+      // Check primary courseAccess collection by userId
+      const accessRef = db.collection("courseAccess");
+      const accessSnap = await accessRef
         .where("userId", "==", data.userId)
-        .where("courseId", "==", data.courseId);
-        
-      const legacySnap = await legacyAccessRef.get();
+        .where("courseId", "==", data.courseId)
+        .get();
 
-      const hasAccess = purchaseSnap.exists || !legacySnap.empty;
+      let hasValidAccess = false;
 
-      if (!hasAccess) {
+      if (!accessSnap.empty) {
+        const docData = accessSnap.docs[0]?.data();
+        if (docData?.expiresAt) {
+          hasValidAccess = new Date() <= new Date(docData.expiresAt);
+        } else {
+          hasValidAccess = true;
+        }
+      }
+
+      // If not found yet, also check by email (for guest purchases or email-based userId)
+      if (!hasValidAccess) {
+        const emailSnap = await accessRef
+          .where("email", "==", data.userId)
+          .where("courseId", "==", data.courseId)
+          .get();
+
+        if (!emailSnap.empty) {
+          const docData = emailSnap.docs[0]?.data();
+          if (docData?.expiresAt) {
+            hasValidAccess = new Date() <= new Date(docData.expiresAt);
+          } else {
+            hasValidAccess = true;
+          }
+        }
+      }
+
+      // Check legacy collections if still not found
+      if (!hasValidAccess) {
+        const purchaseRef = db.collection("users")
+          .doc(data.userId)
+          .collection("purchases")
+          .doc(data.courseId);
+        const purchaseSnap = await purchaseRef.get();
+
+        const legacyAccessRef = db.collection("course_access")
+          .where("userId", "==", data.userId)
+          .where("courseId", "==", data.courseId);
+        const legacySnap = await legacyAccessRef.get();
+
+        hasValidAccess = purchaseSnap.exists || !legacySnap.empty;
+      }
+
+      if (!hasValidAccess) {
         throw new Error("Unauthorized: You do not have access to this course's private resources.");
       }
     }
