@@ -1,12 +1,11 @@
 /**
- * Server-side Firebase Storage thumbnail upload function.
- * Uses Firebase Admin SDK credentials from .env to upload thumbnails
- * directly to Google Firebase Storage without hitting Supabase quotas,
- * and generates a permanent, high-performance public CDN download URL.
+ * Server-side native thumbnail storage using Firestore database.
+ * Completely free, zero external storage buckets, zero CORS errors,
+ * zero Supabase egress limits, and served with 1-year browser caching.
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { getAdminApp } from "@/services/database/admin-firestore";
+import { getAdminFirestore } from "@/services/database/admin-firestore";
 import { z } from "zod";
 import crypto from "crypto";
 
@@ -16,50 +15,30 @@ export const uploadThumbnailServer = createServerFn({ method: "POST" })
       fileName: z.string().min(1),
       fileBase64: z.string().min(1),
       fileType: z.string().default("image/webp"),
-      folder: z.string().default("course-thumbnails"),
+      folder: z.string().optional(),
     })
   )
   .handler(async ({ data }) => {
-    console.log("uploadThumbnailServer: starting server-side upload for", data.fileName);
+    console.log("[ThumbnailServer] Storing thumbnail for", data.fileName);
 
     try {
-      const app = await getAdminApp();
-      const { getStorage } = await import("firebase-admin/storage");
+      const db = await getAdminFirestore();
+      const uniqueSuffix = crypto.randomBytes(6).toString("hex");
+      const thumbId = `th_${Date.now()}_${uniqueSuffix}`;
 
-      const bucketName =
-        process.env["VITE_FIREBASE_STORAGE_BUCKET"] ||
-        process.env["FIREBASE_STORAGE_BUCKET"] ||
-        "abhiraj-skillsup.firebasestorage.app";
-
-      const storage = getStorage(app);
-      const bucket = storage.bucket(bucketName);
-
-      const sanitizedName = data.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const storagePath = data.folder
-        ? `${data.folder}/${Date.now()}-${sanitizedName}`
-        : `${Date.now()}-${sanitizedName}`;
-
-      const file = bucket.file(storagePath);
-      const buffer = Buffer.from(data.fileBase64, "base64");
-      const downloadToken = crypto.randomUUID();
-
-      await file.save(buffer, {
-        metadata: {
-          contentType: data.fileType,
-          metadata: {
-            firebaseStorageDownloadTokens: downloadToken,
-          },
-          cacheControl: "public, max-age=31536000",
-        },
+      await db.collection("thumbnails").doc(thumbId).set({
+        fileName: data.fileName,
+        base64: data.fileBase64,
+        contentType: data.fileType || "image/webp",
+        createdAt: new Date().toISOString(),
       });
 
-      const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${downloadToken}`;
-      console.log("uploadThumbnailServer: uploaded successfully to Firebase:", publicUrl);
+      const publicUrl = `/api/thumbnail/${thumbId}`;
+      console.log("[ThumbnailServer] Successfully stored thumbnail. Public URL:", publicUrl);
 
       return { publicUrl };
     } catch (err: any) {
-      console.error("uploadThumbnailServer error:", err?.message || err);
-      throw new Error(`Firebase Storage upload failed: ${err?.message || "Unknown error"}`);
+      console.error("[ThumbnailServer] Error saving thumbnail:", err?.message || err);
+      throw new Error(`Failed to save thumbnail: ${err?.message || "Internal error"}`);
     }
   });
-

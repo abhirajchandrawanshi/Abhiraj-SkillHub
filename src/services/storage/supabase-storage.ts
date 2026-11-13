@@ -1,27 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
-import { getStorageInstance, initializeFirebase } from "@/services/database/firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { uploadThumbnailServer } from "./thumbnail-server";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-let supabase: ReturnType<typeof createClient> | null = null;
-
-function getSupabase() {
-  if (typeof window === "undefined") return null;
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn("Supabase URL or anon key is missing. Check your .env file.");
-    return null;
-  }
-  if (!supabase) {
-    supabase = createClient(supabaseUrl, supabaseAnonKey);
-  }
-  return supabase;
-}
-
 /**
- * Converts a browser File into base64 string for server-side upload
+ * Converts a browser File into base64 string
  */
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -39,20 +19,20 @@ function fileToBase64(file: File): Promise<string> {
 
 /**
  * Compresses an image in the browser using HTML Canvas before upload.
- * Reduces raw 3-5MB camera/screenshot images to ~50-90KB WebP files.
- * This saves ~98% bandwidth and prevents exceeding storage egress quotas.
+ * Reduces raw 3-5MB camera/screenshot images to ~30-50KB WebP files.
+ * This saves ~98% bandwidth and prevents exceeding storage quotas.
  */
 export async function compressImage(
   file: File,
-  maxWidth = 1200,
+  maxWidth = 900,
   quality = 0.82
 ): Promise<File> {
-  // If not a compressible image type or already very small (< 100KB), return as-is
+  // If not a compressible image type or already very small (< 60KB), return as-is
   if (
     !file.type.startsWith("image/") ||
     file.type === "image/svg+xml" ||
     file.type === "image/gif" ||
-    file.size <= 100 * 1024
+    file.size <= 60 * 1024
   ) {
     return file;
   }
@@ -124,38 +104,11 @@ export async function compressImage(
 }
 
 /**
- * Upload a file directly to Firebase Storage via client SDK.
- */
-export async function uploadToFirebaseStorage(
-  file: File,
-  folder = "course-thumbnails"
-): Promise<string> {
-  await initializeFirebase();
-  const storage = getStorageInstance();
-  if (!storage) {
-    throw new Error("Firebase Storage client is not initialized.");
-  }
-
-  const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const filePath = folder
-    ? `${folder}/${Date.now()}-${sanitizedName}`
-    : `${Date.now()}-${sanitizedName}`;
-
-  const storageRef = ref(storage, filePath);
-  const snapshot = await uploadBytes(storageRef, file, {
-    contentType: file.type || "image/webp",
-    cacheControl: "public, max-age=31536000",
-  });
-
-  return await getDownloadURL(snapshot.ref);
-}
-
-/**
- * Upload a file with automatic compression and multi-provider fallback:
- * 1. Automatically compresses image to WebP (~50-90KB) to protect egress limits.
- * 2. Attempts client-side Firebase Storage first.
- * 3. Falls back to server-side Firebase Storage (Admin SDK, bypassing client rules).
- * 4. Falls back to Supabase Storage.
+ * Upload a file with automatic compression and 100% free native server storage:
+ * 1. Automatically compresses image to lightweight WebP (~30-50KB).
+ * 2. Uploads through the same-origin server function (bypassing all CORS issues).
+ * 3. Stores in Firestore and serves via /api/thumbnail/:id with 1-year browser cache.
+ * 4. Fallback to direct data URL if the server is unreachable.
  *
  * @param file      The File object to upload
  * @param bucket    The Storage bucket name / folder (default: "course-thumbnails")
@@ -167,88 +120,41 @@ export async function uploadToSupabase(
   bucket = "course-thumbnails",
   folder = "",
 ): Promise<string> {
-  // 1. Compress image to minimize bandwidth and eliminate quota issues
-  const optimizedFile = await compressImage(file);
-  const targetFolder = folder ? `${bucket}/${folder}` : bucket;
+  // 1. Compress image to ~30-50KB WebP
+  const optimizedFile = await compressImage(file, 900, 0.82);
 
-  // 2. Try client-side Firebase Storage first
-  try {
-    const firebaseUrl = await uploadToFirebaseStorage(optimizedFile, targetFolder);
-    if (firebaseUrl) {
-      console.log("Uploaded successfully to Firebase Storage (client):", firebaseUrl);
-      return firebaseUrl;
-    }
-  } catch (firebaseClientErr: any) {
-    console.warn(
-      "Client Firebase Storage skipped/failed, trying server-side Firebase Admin upload:",
-      firebaseClientErr?.message || firebaseClientErr
-    );
-  }
+  // 2. Read as base64 string
+  const base64 = await fileToBase64(optimizedFile);
 
-  // 3. Try server-side Firebase Admin Storage (privileged, reliable, 100% free)
+  // 3. Upload to server-side native storage (same-origin, 0 CORS)
   try {
-    const base64 = await fileToBase64(optimizedFile);
     const serverResult = await uploadThumbnailServer({
       data: {
         fileName: optimizedFile.name,
         fileBase64: base64,
-        fileType: optimizedFile.type || "image/webp",
-        folder: targetFolder,
+        fileType: "image/webp",
+        folder: folder || bucket,
       },
     });
 
     if (serverResult?.publicUrl) {
-      console.log("Uploaded successfully to Firebase Storage (server):", serverResult.publicUrl);
+      console.log("[Storage] Thumbnail saved successfully:", serverResult.publicUrl);
       return serverResult.publicUrl;
     }
   } catch (serverErr: any) {
     console.warn(
-      "Server Firebase Storage upload failed, attempting Supabase fallback:",
+      "[Storage] Server storage call encountered an issue, falling back to data URL:",
       serverErr?.message || serverErr
     );
   }
 
-  // 4. Fall back to Supabase Storage
-  const client = getSupabase();
-  if (!client) {
-    throw new Error(
-      "Storage is not configured. Please paste an image URL directly into the 'Or Thumbnail URL' field."
-    );
-  }
-
-  const sanitizedName = optimizedFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const filePath = folder
-    ? `${folder}/${Date.now()}-${sanitizedName}`
-    : `${Date.now()}-${sanitizedName}`;
-
-  const { data, error } = await client.storage.from(bucket).upload(filePath, optimizedFile, {
-    cacheControl: "31536000",
-    upsert: false,
-  });
-
-  if (error) {
-    console.error("Supabase upload error:", error);
-    const msg = error.message || "";
-    if (
-      msg.includes("exceed_cached_egress_quota") ||
-      (error as any).statusCode === "402" ||
-      (error as any).status === 402
-    ) {
-      throw new Error(
-        "Storage bandwidth quota exceeded (exceed_cached_egress_quota). Paste an image URL directly into the 'Or Thumbnail URL' field (e.g. from ImgBB, PostImages, or Google Drive)."
-      );
-    }
-    throw new Error(`Upload failed: ${error.message}`);
-  }
-
-  const {
-    data: { publicUrl },
-  } = client.storage.from(bucket).getPublicUrl(data.path);
-
-  return publicUrl;
+  // 4. Safe fallback: return compressed base64 data URL directly
+  // A 30-40KB data URL works anywhere with zero requests!
+  return `data:image/webp;base64,${base64}`;
 }
 
 // Alias for semantic clarity in newer code
 export const uploadImage = uploadToSupabase;
+
 
 

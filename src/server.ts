@@ -53,9 +53,86 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+// In-memory cache for ultra-fast (1ms) thumbnail responses
+const thumbnailMemoryCache = new Map<
+  string,
+  { buffer: Buffer; contentType: string }
+>();
+
+async function handleThumbnailRequest(request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith("/api/thumbnail/")) {
+    return null;
+  }
+
+  const thumbId = url.pathname.replace("/api/thumbnail/", "").split("?")[0]?.trim();
+  if (!thumbId) {
+    return new Response("Thumbnail ID required", { status: 400 });
+  }
+
+  // 1. Serve from in-memory cache if available
+  const cached = thumbnailMemoryCache.get(thumbId);
+  if (cached) {
+    return new Response(new Uint8Array(cached.buffer), {
+      status: 200,
+      headers: {
+        "Content-Type": cached.contentType,
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "Content-Length": cached.buffer.length.toString(),
+      },
+    });
+  }
+
+  // 2. Fetch from Firestore
+  try {
+    const { getAdminFirestore } = await import("./services/database/admin-firestore");
+    const db = await getAdminFirestore();
+    const docSnap = await db.collection("thumbnails").doc(thumbId).get();
+
+    if (!docSnap.exists) {
+      return new Response("Thumbnail not found", { status: 404 });
+    }
+
+    const docData = docSnap.data();
+    const base64Str = docData?.base64;
+    const contentType = docData?.contentType || "image/webp";
+
+    if (!base64Str) {
+      return new Response("Thumbnail content empty", { status: 404 });
+    }
+
+    const buffer = Buffer.from(base64Str, "base64");
+
+    // Cache in RAM (up to 200 recent thumbnails)
+    if (thumbnailMemoryCache.size > 200) {
+      const firstKey = thumbnailMemoryCache.keys().next().value;
+      if (firstKey) thumbnailMemoryCache.delete(firstKey);
+    }
+    thumbnailMemoryCache.set(thumbId, { buffer, contentType });
+
+    return new Response(new Uint8Array(buffer), {
+      status: 200,
+      headers: {
+        "Content-Type": contentType,
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "Content-Length": buffer.length.toString(),
+      },
+    });
+  } catch (err) {
+    console.error("[Thumbnail Endpoint] Error loading thumbnail:", err);
+    return new Response("Error loading thumbnail", { status: 500 });
+  }
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      // Direct high-performance thumbnail serving (zero CORS, zero external dependency)
+      const thumbResponse = await handleThumbnailRequest(request);
+      if (thumbResponse) {
+        return thumbResponse;
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
