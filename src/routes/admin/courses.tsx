@@ -59,6 +59,27 @@ export const Route = createFileRoute("/admin/courses")({
   component: AdminCourses,
 });
 
+function AdminCourseThumbnail({ src, title }: { src?: string; title: string }) {
+  const [hasError, setHasError] = useState(false);
+  if (!src || hasError) {
+    return (
+      <div className="h-12 w-12 rounded-md bg-secondary/80 border border-border flex items-center justify-center shrink-0 text-sm font-bold text-muted-foreground select-none">
+        {title.trim().charAt(0).toUpperCase() || "📚"}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={title}
+      loading="lazy"
+      decoding="async"
+      onError={() => setHasError(true)}
+      className="h-12 w-12 rounded-md object-contain bg-secondary/60 shrink-0"
+    />
+  );
+}
+
 function AdminCourses() {
   const { isAdmin, adminUser } = useAdminAuth();
   const queryClient = useQueryClient();
@@ -270,15 +291,7 @@ function AdminCourses() {
                       <TableRow key={course.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            {course.thumbnail && (
-                              <img
-                                src={course.thumbnail}
-                                alt={course.title}
-                                loading="lazy"
-                                decoding="async"
-                                className="h-12 w-12 rounded-md object-contain bg-secondary/60"
-                              />
-                            )}
+                            <AdminCourseThumbnail src={course.thumbnail} title={course.title} />
                             <div>
                               <div className="font-medium">{course.title}</div>
                               <div className="text-sm text-muted-foreground line-clamp-1">

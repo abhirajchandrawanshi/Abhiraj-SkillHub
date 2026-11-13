@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -14,6 +15,7 @@ const firebaseConfig = {
 let app = null;
 let auth = null;
 let db = null;
+let storage = null;
 let initializationError = null;
 let isInitialized = false;
 let initPromise: Promise<void> | null = null;
@@ -48,6 +50,13 @@ function initializeFirebase(): Promise<void> {
 
       db = getFirestore(app);
       console.log("Firebase Firestore initialized");
+
+      try {
+        storage = getStorage(app);
+        console.log("Firebase Storage initialized");
+      } catch (storageErr) {
+        console.warn("Firebase Storage initialization skipped/failed:", storageErr);
+      }
       
       isInitialized = true;
     } catch (error) {
@@ -78,4 +87,13 @@ export function getAuthInstance() {
   return auth;
 }
 
-export { auth, db, initializationError, initializeFirebase };
+// Export a function to get the storage instance safely
+export function getStorageInstance() {
+  if (!storage) {
+    console.warn("Firebase Storage not initialized, returning null");
+    return null;
+  }
+  return storage;
+}
+
+export { auth, db, storage, initializationError, initializeFirebase };

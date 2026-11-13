@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X, ShoppingCart, Trash2, Tag, ArrowRight, Loader2, Lock, Sparkles, AlertCircle, Percent } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -140,15 +140,7 @@ export function CartDrawer({ open, onClose, onCheckout }: CartDrawerProps) {
                             : "border-border"
                         }`}
                       >
-                        {course.thumbnail && (
-                          <img
-                            src={course.thumbnail}
-                            alt={course.title}
-                            loading="lazy"
-                            decoding="async"
-                            className="h-14 w-14 rounded-lg object-contain bg-secondary/60 flex-shrink-0"
-                          />
-                        )}
+                        <CartItemThumbnail src={course.thumbnail} title={course.title} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold leading-tight line-clamp-2">
                             {course.title}
@@ -298,5 +290,26 @@ export function CartDrawer({ open, onClose, onCheckout }: CartDrawerProps) {
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+function CartItemThumbnail({ src, title }: { src?: string; title: string }) {
+  const [hasError, setHasError] = useState(false);
+  if (!src || hasError) {
+    return (
+      <div className="h-14 w-14 rounded-lg bg-secondary/80 border border-border flex items-center justify-center shrink-0 text-sm font-bold text-muted-foreground select-none">
+        {title.trim().charAt(0).toUpperCase() || "📚"}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={title}
+      loading="lazy"
+      decoding="async"
+      onError={() => setHasError(true)}
+      className="h-14 w-14 rounded-lg object-contain bg-secondary/60 flex-shrink-0"
+    />
   );
 }

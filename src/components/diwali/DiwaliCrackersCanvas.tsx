@@ -158,16 +158,22 @@ export const DiwaliCrackersCanvas = memo(function DiwaliCrackersCanvas({
     const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) return;
 
-    // Detect low-power devices for automatic performance scaling
-    const isLowPower =
-      typeof navigator !== "undefined" &&
-      navigator.hardwareConcurrency !== undefined &&
-      navigator.hardwareConcurrency <= 4;
+    // Detect mobile and low-power devices for automatic performance scaling
+    const isMobile =
+      typeof window !== "undefined" &&
+      (window.innerWidth < 768 ||
+        /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || ""));
 
-    let dpr = Math.min(window.devicePixelRatio || 1, isLowPower ? 1 : 1.25);
+    const isLowPower =
+      isMobile ||
+      (typeof navigator !== "undefined" &&
+        navigator.hardwareConcurrency !== undefined &&
+        navigator.hardwareConcurrency <= 4);
+
+    let dpr = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, isLowPower ? 1 : 1.25);
 
     const setCanvasSize = () => {
-      dpr = Math.min(window.devicePixelRatio || 1, isLowPower ? 1 : 1.25);
+      dpr = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, isLowPower ? 1 : 1.25);
       canvas.width = Math.floor(window.innerWidth * dpr);
       canvas.height = Math.floor(window.innerHeight * dpr);
       canvas.style.width = window.innerWidth + "px";
@@ -212,7 +218,7 @@ export const DiwaliCrackersCanvas = memo(function DiwaliCrackersCanvas({
       diwaliSound.playCrispCrackle();
       triggerBurstFlash(x, y, "#FFD166", scale);
 
-      const count = isLowPower ? 26 : 38;
+      const count = isLowPower ? 16 : 38;
       for (let i = 0; i < count; i++) {
         const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.8;
         const speed = (2.0 + Math.random() * 4.8) * scale;
@@ -243,8 +249,8 @@ export const DiwaliCrackersCanvas = memo(function DiwaliCrackersCanvas({
       const flashColor = burstType === "magenta-pearl" ? "#FF007F" : "#FFD166";
       triggerBurstFlash(x, y, flashColor, scale);
 
-      const rayCount = isLowPower ? 24 : 28 + Math.floor(Math.random() * 6);
-      const maxTrail = Math.round((isLowPower ? 6 : 8) * Math.min(scale, 1.25));
+      const rayCount = isLowPower ? 14 : 28 + Math.floor(Math.random() * 6);
+      const maxTrail = Math.round((isLowPower ? 3 : 8) * Math.min(scale, 1.25));
 
       for (let i = 0; i < rayCount; i++) {
         const angle = (Math.PI * 2 * i) / rayCount + (Math.random() - 0.5) * 0.2;
@@ -294,7 +300,7 @@ export const DiwaliCrackersCanvas = memo(function DiwaliCrackersCanvas({
       diwaliSound.playWhistlePop();
       triggerBurstFlash(x, y, "#00F5D4", scale);
 
-      const tracerCount = isLowPower ? 10 : 13;
+      const tracerCount = isLowPower ? 7 : 13;
       for (let i = 0; i < tracerCount; i++) {
         const angle = (Math.PI * 2 * i) / tracerCount + (Math.random() - 0.5) * 0.2;
         const speed = (3.4 + Math.random() * 2.2) * scale;
@@ -313,7 +319,7 @@ export const DiwaliCrackersCanvas = memo(function DiwaliCrackersCanvas({
           decay: 0.012,
           headSize: 2.6 * scale,
           trail: [],
-          maxTrailLength: 7,
+          maxTrailLength: isLowPower ? 3 : 7,
           hasSubBurst: true,
           subBurstTimer: 18 + Math.floor(Math.random() * 8),
         });
@@ -323,7 +329,7 @@ export const DiwaliCrackersCanvas = memo(function DiwaliCrackersCanvas({
     // Trigger secondary sub-burst at ray tip
     const triggerSubBurstAt = (x: number, y: number, baseColor: string) => {
       diwaliSound.playSubBurstPop();
-      const count = 5 + Math.floor(Math.random() * 3);
+      const count = isLowPower ? 3 : 5 + Math.floor(Math.random() * 3);
       for (let s = 0; s < count; s++) {
         const angle = Math.random() * Math.PI * 2;
         const spd = 1.2 + Math.random() * 2.2;
@@ -539,12 +545,13 @@ export const DiwaliCrackersCanvas = memo(function DiwaliCrackersCanvas({
       // Additive blending for luminous festival fireworks
       ctx.globalCompositeOperation = "lighter";
 
-      // Auto launch crackers periodically (1–2 seconds, 1 or 2 together)
+      // Auto launch crackers periodically (adaptive pacing for mobile & desktop)
       if (now > nextAutoLaunchRef.current) {
+        const maxConcurrent = isLowPower ? 1 : MAX_CONCURRENT_ROCKETS;
         const currentCount = rocketsRef.current.length;
-        if (currentCount < MAX_CONCURRENT_ROCKETS) {
-          const available = MAX_CONCURRENT_ROCKETS - currentCount;
-          const launchBatch = available >= 2 ? (Math.random() < 0.5 ? 2 : 1) : 1;
+        if (currentCount < maxConcurrent) {
+          const available = maxConcurrent - currentCount;
+          const launchBatch = isLowPower ? 1 : (available >= 2 ? (Math.random() < 0.5 ? 2 : 1) : 1);
 
           for (let b = 0; b < launchBatch; b++) {
             let sx: number;
@@ -567,7 +574,7 @@ export const DiwaliCrackersCanvas = memo(function DiwaliCrackersCanvas({
             launchRocket(sx);
           }
 
-          nextAutoLaunchRef.current = now + 1000 + Math.random() * 800;
+          nextAutoLaunchRef.current = now + (isLowPower ? 2600 + Math.random() * 1400 : 1000 + Math.random() * 800);
         } else {
           nextAutoLaunchRef.current = now + 150;
         }
@@ -933,26 +940,31 @@ export const DiwaliCrackersCanvas = memo(function DiwaliCrackersCanvas({
           const beadAlpha = ray.alpha * (0.3 + 0.7 * progress);
           const beadSize = pt.size * (0.6 + 0.4 * progress);
 
-          // Outer soft glow (zero-cost shadow replacement)
-          ctx.globalAlpha = beadAlpha * 0.35;
-          ctx.fillStyle = pt.color;
-          ctx.beginPath();
-          ctx.arc(pt.x, pt.y, beadSize * 1.6, 0, Math.PI * 2);
-          ctx.fill();
+          // Outer soft glow (rendered only on desktop to eliminate over 1,000 canvas draw calls per frame on mobile)
+          if (!isLowPower) {
+            ctx.globalAlpha = beadAlpha * 0.35;
+            ctx.fillStyle = pt.color;
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, beadSize * 1.6, 0, Math.PI * 2);
+            ctx.fill();
+          }
 
           // Inner bright bead
           ctx.globalAlpha = beadAlpha;
+          ctx.fillStyle = pt.color;
           ctx.beginPath();
           ctx.arc(pt.x, pt.y, beadSize, 0, Math.PI * 2);
           ctx.fill();
         }
 
         // Leading pearl head
-        ctx.globalAlpha = ray.alpha * 0.5;
-        ctx.fillStyle = ray.color;
-        ctx.beginPath();
-        ctx.arc(ray.x, ray.y, ray.headSize * 2.0, 0, Math.PI * 2);
-        ctx.fill();
+        if (!isLowPower) {
+          ctx.globalAlpha = ray.alpha * 0.5;
+          ctx.fillStyle = ray.color;
+          ctx.beginPath();
+          ctx.arc(ray.x, ray.y, ray.headSize * 2.0, 0, Math.PI * 2);
+          ctx.fill();
+        }
 
         ctx.globalAlpha = ray.alpha;
         ctx.fillStyle = ray.headColor;
@@ -978,15 +990,19 @@ export const DiwaliCrackersCanvas = memo(function DiwaliCrackersCanvas({
       ctx.globalCompositeOperation = "source-over";
       ctx.globalAlpha = 1;
 
-      // Cap max particles for silky 60fps performance
-      if (raysRef.current.length > 180) {
-        raysRef.current.splice(0, raysRef.current.length - 180);
+      // Cap max particles dynamically for buttery 60fps performance on any device
+      const maxRays = isLowPower ? 45 : 180;
+      const maxSparks = isLowPower ? 35 : 120;
+      const maxSub = isLowPower ? 20 : 80;
+
+      if (raysRef.current.length > maxRays) {
+        raysRef.current.splice(0, raysRef.current.length - maxRays);
       }
-      if (fountainSparksRef.current.length > 120) {
-        fountainSparksRef.current.splice(0, fountainSparksRef.current.length - 120);
+      if (fountainSparksRef.current.length > maxSparks) {
+        fountainSparksRef.current.splice(0, fountainSparksRef.current.length - maxSparks);
       }
-      if (subSparklesRef.current.length > 80) {
-        subSparklesRef.current.splice(0, subSparklesRef.current.length - 80);
+      if (subSparklesRef.current.length > maxSub) {
+        subSparklesRef.current.splice(0, subSparklesRef.current.length - maxSub);
       }
 
       animFrameRef.current = requestAnimationFrame(animate);

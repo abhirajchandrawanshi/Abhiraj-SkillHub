@@ -361,6 +361,7 @@ function CourseCard({
   const rating = fluctuatingRating(baseRating, course.id);
 
   const isFree = course.price === 0 || course.isFree === true;
+  const [imageError, setImageError] = useState(false);
 
   const formattedRatingCount = !isFree
     ? displayedCount >= 1000
@@ -384,17 +385,21 @@ function CourseCard({
     >
       {/* ── LEFT: Thumbnail ── */}
       <div className="w-full sm:w-64 md:w-72 lg:w-80 flex-shrink-0 bg-secondary/60 min-h-[200px] sm:min-h-[220px] flex items-center justify-center overflow-hidden">
-        {course.thumbnail ? (
+        {course.thumbnail && !imageError ? (
           <img
             src={course.thumbnail}
             alt={course.title}
             loading="lazy"
             decoding="async"
+            onError={() => setImageError(true)}
             className="w-full h-full object-contain min-h-[200px] sm:min-h-[220px]"
           />
         ) : (
-          <div className="h-full min-h-[200px] sm:min-h-[220px] w-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
-            <span className="text-4xl">📚</span>
+          <div className="h-full min-h-[200px] sm:min-h-[220px] w-full flex flex-col items-center justify-center p-6 text-center bg-gradient-to-br from-primary/15 via-primary/5 to-secondary/30">
+            <span className="text-4xl mb-2">🎓</span>
+            <span className="text-sm font-semibold text-foreground/85 line-clamp-2 max-w-[90%]">
+              {course.title}
+            </span>
           </div>
         )}
       </div>
@@ -633,6 +638,8 @@ function FreeCourseCard({ course, index }: { course: Course; index: number }) {
     }
   };
 
+  const [imageError, setImageError] = useState(false);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -642,17 +649,21 @@ function FreeCourseCard({ course, index }: { course: Course; index: number }) {
     >
       {/* Thumbnail */}
       <div className="relative w-full aspect-[4/3] rounded-xl bg-secondary/60 mb-3 flex items-center justify-center overflow-hidden">
-        {course.thumbnail ? (
+        {course.thumbnail && !imageError ? (
           <img
             src={course.thumbnail}
             alt={course.title}
             loading="lazy"
             decoding="async"
+            onError={() => setImageError(true)}
             className="w-full h-full object-contain"
           />
         ) : (
-          <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-green-500/10 to-emerald-500/5">
-            <span className="text-5xl">📚</span>
+          <div className="h-full w-full flex flex-col items-center justify-center p-4 text-center bg-gradient-to-br from-green-500/15 to-emerald-500/5">
+            <span className="text-4xl mb-1.5">📚</span>
+            <span className="text-xs font-semibold text-foreground/80 line-clamp-2">
+              {course.title}
+            </span>
           </div>
         )}
         {/* Hover overlay */}

@@ -84,6 +84,8 @@ export function CourseFormDialog({
   const [isUploading, setIsUploading] = useState(false);
   const [isPdfUploading, setIsPdfUploading] = useState(false);
   const [error, setError] = useState("");
+  const [thumbnailPreview, setThumbnailPreview] = useState<string>("");
+  const [imageError, setImageError] = useState(false);
   const { isAdmin, adminUser } = useAdminAuth();
 
   // Resource link management
@@ -128,6 +130,18 @@ export function CourseFormDialog({
   const courseType = watch("courseType");
   const watchedPrice = watch("price");
   const watchedOriginalPrice = watch("originalPrice");
+  const watchedThumbnail = watch("thumbnail");
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setThumbnailPreview(url);
+      setImageError(false);
+    } else {
+      setThumbnailPreview("");
+    }
+  };
 
   // Auto-calculate discount whenever price or originalPrice changes
   useEffect(() => {
@@ -167,6 +181,8 @@ export function CourseFormDialog({
         publishedDate: course.publishedDate || "",
       });
       setResources(course.resources || []);
+      setThumbnailPreview("");
+      setImageError(false);
     } else {
       reset({
         courseType: defaultCourseType,
@@ -190,6 +206,8 @@ export function CourseFormDialog({
         publishedDate: "",
       });
       setResources([]);
+      setThumbnailPreview("");
+      setImageError(false);
     }
   }, [course, reset, defaultCourseType]);
 
@@ -235,8 +253,8 @@ export function CourseFormDialog({
         } catch (uploadErr) {
           throw new Error(
             uploadErr instanceof Error
-              ? `Thumbnail upload failed: ${uploadErr.message}`
-              : "Thumbnail upload failed. Please try again."
+              ? uploadErr.message
+              : "Thumbnail upload failed. Please try again or paste an image URL directly."
           );
         } finally {
           setIsUploading(false);
@@ -531,24 +549,64 @@ export function CourseFormDialog({
 
 
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="thumbnail-file">Thumbnail Picture</Label>
-              <Input
-                id="thumbnail-file"
-                type="file"
-                accept="image/*"
-                className="cursor-pointer"
-              />
+          <div className="space-y-3">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="thumbnail-file">Thumbnail Picture</Label>
+                <Input
+                  id="thumbnail-file"
+                  type="file"
+                  accept="image/*"
+                  className="cursor-pointer"
+                  onChange={handleFileChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="thumbnail">Or Thumbnail URL</Label>
+                <Input
+                  id="thumbnail"
+                  placeholder="https://example.com/image.jpg"
+                  {...register("thumbnail")}
+                  onChange={(e) => {
+                    register("thumbnail").onChange(e);
+                    setImageError(false);
+                  }}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="thumbnail">Or Thumbnail URL</Label>
-              <Input
-                id="thumbnail"
-                placeholder="https://example.com/image.jpg"
-                {...register("thumbnail")}
-              />
-            </div>
+
+            {(thumbnailPreview || watchedThumbnail) && (
+              <div className="flex items-center gap-3 rounded-lg border border-border bg-secondary/30 p-2.5">
+                <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded border bg-muted flex items-center justify-center">
+                  <img
+                    src={thumbnailPreview || watchedThumbnail}
+                    alt="Thumbnail preview"
+                    className="h-full w-full object-cover"
+                    onError={() => setImageError(true)}
+                    onLoad={() => setImageError(false)}
+                  />
+                </div>
+                <div className="min-w-0 flex-1 text-xs">
+                  {imageError ? (
+                    <div className="text-destructive font-medium">
+                      ⚠️ Thumbnail failed to load from this URL (Storage quota exceeded or broken link).
+                      <p className="text-muted-foreground text-[11px] mt-0.5">
+                        Upload a new image file or paste an external image URL above to fix it.
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="font-semibold text-foreground truncate">
+                        {thumbnailPreview ? "New file ready to upload" : "Current Thumbnail"}
+                      </p>
+                      <p className="text-muted-foreground truncate text-[11px]">
+                        {thumbnailPreview ? "Will auto-compress to lightweight WebP on save" : watchedThumbnail}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Course PDF Upload */}
