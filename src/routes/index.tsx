@@ -34,22 +34,13 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion";
-import { SparklesCore } from "@/components/ui/sparkles";
-import KineticGrid from "@/components/ui/kinetic-grid";
 
 import { Button } from "@/components/ui/button";
-import { GradientButton } from "@/components/ui/gradient-button";
-import { SpinningBorderButton } from "@/components/ui/spinning-border-button";
-import { BorderBeam } from "@/components/ui/border-beam";
 import { CheckoutDialog } from "@/components/course/CheckoutDialog";
 import { CartDrawer } from "@/components/course/CartDrawer";
 import { ExclusiveOfferBanner } from "@/components/offer/ExclusiveOfferBanner";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { DiwaliBanner } from "@/components/diwali/DiwaliBanner";
-import { DiwaliControlPill } from "@/components/diwali/DiwaliControlPill";
 import { FeedbackCard } from "@/components/ui/feedback-card";
-import { BorderBeamPanel } from "@/components/ui/border-beam-panel";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -171,7 +162,10 @@ function growingRatingCount(
   // Should never be null due to the anchor, but be safe
   if (!pubDate) pubDate = new Date("2024-08-01");
 
-  const days = Math.max(0, Math.floor((Date.now() - pubDate.getTime()) / 86_400_000));
+  // Use a fixed reference date to avoid hydration mismatch
+  // This ensures server and client render the same value
+  const referenceDate = new Date("2024-11-01").getTime();
+  const days = Math.max(0, Math.floor((referenceDate - pubDate.getTime()) / 86_400_000));
 
   const schedule = [0.08, 0.21, 0.36, 0.5, 0.69, 0.85];
   let base = 0;
@@ -194,9 +188,10 @@ function growingRatingCount(
  */
 function fluctuatingRating(base: number, courseId: string): number {
   const seed = strHash(courseId);
-  const today = new Date();
+  // Use a fixed reference date to avoid hydration mismatch
+  const fixedDate = new Date("2024-11-15");
   const dayOfYear = Math.floor(
-    (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86_400_000,
+    (fixedDate.getTime() - new Date(fixedDate.getFullYear(), 0, 0).getTime()) / 86_400_000,
   );
 
   // Deterministically jump forward in intervals of 1, 2, or 3 days
@@ -362,6 +357,7 @@ function CourseCard({
 
   const isFree = course.price === 0 || course.isFree === true;
   const [imageError, setImageError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   const formattedRatingCount = !isFree
     ? displayedCount >= 1000
@@ -369,20 +365,17 @@ function CourseCard({
       : displayedCount.toString()
     : null;
 
+  // Use fixed date formatting to avoid hydration mismatch
   const publishedDate = course.publishedDate
-    ? new Date(course.publishedDate).toLocaleDateString("en-US", {
-        month: "short",
-        year: "numeric",
-      })
+    ? (() => {
+        const date = new Date(course.publishedDate);
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        return `${months[date.getMonth()]} ${date.getFullYear()}`;
+      })()
     : "Aug 2024";
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -16 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.4, delay: index * 0.07 }}
-      className="group flex flex-col sm:flex-row overflow-hidden rounded-2xl bg-card border border-border shadow-sm hover:shadow-lg hover:border-primary/30 transition-all duration-300"
-    >
+    <div className="group flex flex-col sm:flex-row overflow-hidden rounded-2xl bg-card border border-border shadow-sm hover:shadow-lg hover:border-primary/30 transition-all duration-300">
       {/* ── LEFT: Thumbnail ── */}
       <div className="w-full sm:w-64 md:w-72 lg:w-80 flex-shrink-0 bg-secondary/60 min-h-[200px] sm:min-h-[220px] flex items-center justify-center overflow-hidden">
         {course.thumbnail && !imageError ? (
@@ -391,8 +384,11 @@ function CourseCard({
             alt={course.title}
             loading="lazy"
             decoding="async"
+            crossOrigin="anonymous"
             onError={() => setImageError(true)}
-            className="w-full h-full object-contain min-h-[200px] sm:min-h-[220px]"
+            onLoad={() => setImageLoaded(true)}
+            className={`w-full h-full object-contain min-h-[200px] sm:min-h-[220px] ${imageLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
+            suppressHydrationWarning
           />
         ) : (
           <div className="h-full min-h-[200px] sm:min-h-[220px] w-full flex flex-col items-center justify-center p-6 text-center bg-gradient-to-br from-primary/15 via-primary/5 to-secondary/30">
@@ -494,13 +490,13 @@ function CourseCard({
               </Button>
             ) : (
               <>
-                <SpinningBorderButton
+                <Button
                   onClick={handleCourseAccess}
                   disabled={accessLoading}
-                  className="transition-transform hover:scale-105 active:scale-95 shadow-sm"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 active:scale-95 shadow-sm"
                 >
                   {accessLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buy Now"}
-                </SpinningBorderButton>
+                </Button>
                 <Button
                   onClick={() => (inCart ? removeFromCart(course.id) : addToCart(course))}
                   variant={inCart ? "secondary" : "outline"}
@@ -521,55 +517,41 @@ function CourseCard({
 
         {/* Rating (enrolled users only, not for free courses) */}
         {courseAccess && !isFree && (
-          <AnimatePresence>
-            {(!hasRated || !ratingFaded) && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.5 }}
-                className="flex flex-col sm:flex-row sm:items-center gap-2 bg-secondary/50 p-3 rounded-lg border border-border"
-              >
-                {hasRated ? (
-                  <motion.div
-                    initial={{ scale: 0.9 }}
-                    animate={{ scale: 1 }}
-                    className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-1"
-                  >
-                    ✓ Thanks for your rating! (You rated {userRating}★)
-                  </motion.div>
-                ) : (
-                  <>
-                    <span className="text-xs font-semibold text-muted-foreground">
-                      Rate this course:
-                    </span>
-                    <div className="flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <button
-                          key={star}
-                          onClick={() => handleRate(star)}
-                          onMouseEnter={() => setHoverRating(star)}
-                          onMouseLeave={() => setHoverRating(0)}
-                          className="focus:outline-none transition-transform hover:scale-110"
-                        >
-                          <Star
-                            className={`h-5 w-5 ${
-                              star <= (hoverRating || userRating)
-                                ? "fill-amber-500 text-amber-500"
-                                : "text-muted-foreground/40"
-                            }`}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </motion.div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 bg-secondary/50 p-3 rounded-lg border border-border">
+            {hasRated ? (
+              <div className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
+                ✓ Thanks for your rating! (You rated {userRating}★)
+              </div>
+            ) : (
+              <>
+                <span className="text-xs font-semibold text-muted-foreground">
+                  Rate this course:
+                </span>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      onClick={() => handleRate(star)}
+                      onMouseEnter={() => setHoverRating(star)}
+                      onMouseLeave={() => setHoverRating(0)}
+                      className="focus:outline-none transition-transform hover:scale-110"
+                    >
+                      <Star
+                        className={`h-5 w-5 ${
+                          star <= (hoverRating || userRating)
+                            ? "fill-amber-500 text-amber-500"
+                            : "text-muted-foreground/40"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
-          </AnimatePresence>
+          </div>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -639,14 +621,10 @@ function FreeCourseCard({ course, index }: { course: Course; index: number }) {
   };
 
   const [imageError, setImageError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: index * 0.05 }}
-      className="group flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-xl rounded-2xl"
-    >
+    <div className="group flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-xl rounded-2xl">
       {/* Thumbnail */}
       <div className="relative w-full aspect-[4/3] rounded-xl bg-secondary/60 mb-3 flex items-center justify-center overflow-hidden">
         {course.thumbnail && !imageError ? (
@@ -655,8 +633,11 @@ function FreeCourseCard({ course, index }: { course: Course; index: number }) {
             alt={course.title}
             loading="lazy"
             decoding="async"
+            crossOrigin="anonymous"
             onError={() => setImageError(true)}
-            className="w-full h-full object-contain"
+            onLoad={() => setImageLoaded(true)}
+            className={`w-full h-full object-contain ${imageLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
+            suppressHydrationWarning
           />
         ) : (
           <div className="h-full w-full flex flex-col items-center justify-center p-4 text-center bg-gradient-to-br from-green-500/15 to-emerald-500/5">
@@ -693,7 +674,7 @@ function FreeCourseCard({ course, index }: { course: Course; index: number }) {
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Access Course"}
         </Button>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -718,31 +699,6 @@ function Landing() {
 
   // User Profile State
   const [userName, setUserName] = useState("");
-
-  // Diwali Theme State
-  const [diwaliActive, setDiwaliActive] = useState(true);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("abhiacademy-diwali-theme");
-      if (stored !== null) setDiwaliActive(stored === "true");
-    } catch {
-      // Safe catch
-    }
-  }, []);
-
-  const handleToggleDiwali = () => {
-    const next = !diwaliActive;
-    setDiwaliActive(next);
-    try {
-      localStorage.setItem("abhiacademy-diwali-theme", String(next));
-    } catch {
-      // Safe catch
-    }
-    window.dispatchEvent(
-      new CustomEvent("toggle-diwali-theme", { detail: { active: next } }),
-    );
-  };
 
   useEffect(() => {
     setIsMounted(true);
@@ -959,7 +915,7 @@ function Landing() {
   const singleCourse = dynamicCourses.find((c) => c.id === checkoutCourseId);
 
   return (
-    <KineticGrid isDark={isDark}>
+    <>
       <header
         className="relative z-50 py-4 border-b border-border/20 backdrop-blur-md"
         style={{ background: isDark ? "rgba(22,22,24,0.80)" : "rgba(248,249,251,0.80)" }}
@@ -996,33 +952,26 @@ function Landing() {
           </div>
 
           <div className="hidden md:flex items-center gap-6">
-            <BorderBeam
-              size="md"
-              colorVariant="colorful"
-              theme={isDark ? "dark" : "light"}
-              className="rounded-full"
-            >
-              <div className="relative rounded-full overflow-hidden bg-secondary border border-border/20 group">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
-                <input
-                  type="text"
-                  placeholder="Search courses..."
-                  value={searchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  onKeyDown={(e) => e.key === "Escape" && clearSearch()}
-                  className="h-10 w-64 bg-transparent pl-10 pr-8 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none transition-all relative z-10"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={clearSearch}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors z-10"
-                    title="Clear search"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            </BorderBeam>
+            <div className="relative rounded-full overflow-hidden bg-secondary border border-border/20 group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+              <input
+                type="text"
+                placeholder="Search courses..."
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                onKeyDown={(e) => e.key === "Escape" && clearSearch()}
+                className="h-10 w-64 bg-transparent pl-10 pr-8 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none transition-all relative z-10"
+              />
+              {searchQuery && (
+                <button
+                  onClick={clearSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors z-10"
+                  title="Clear search"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
 
             {/* Cart button with badge */}
             <button
@@ -1037,11 +986,6 @@ function Landing() {
                 </span>
               )}
             </button>
-
-            <DiwaliControlPill
-              isActive={diwaliActive}
-              onToggleActive={handleToggleDiwali}
-            />
 
             <ThemeToggle />
             {user ? (
@@ -1106,15 +1050,8 @@ function Landing() {
       </header>
 
       {/* Mobile Menu Dropdown (Rich, high-contrast & phone-friendly) */}
-      <AnimatePresence>
-        {menuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="md:hidden border-b border-border/40 bg-card/98 backdrop-blur-2xl shadow-2xl relative z-40"
-          >
+      {menuOpen && (
+          <div className="md:hidden border-b border-border/40 bg-card/98 backdrop-blur-2xl shadow-2xl relative z-40">
             <div className="flex flex-col p-4 sm:p-5 gap-4 max-h-[85vh] overflow-y-auto">
               {/* Mobile Search */}
               <div className="relative">
@@ -1269,18 +1206,13 @@ function Landing() {
                 </button>
               )}
 
-              {/* Bottom Quick Controls (Diwali & Theme) */}
+              {/* Bottom Quick Controls (Theme) */}
               <div className="flex items-center justify-between pt-1">
-                <DiwaliControlPill
-                  isActive={diwaliActive}
-                  onToggleActive={handleToggleDiwali}
-                />
                 <ThemeToggle />
               </div>
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
 
       <main id="top">
         {/* Hero Section */}
@@ -1296,12 +1228,7 @@ function Landing() {
               </div>
 
               {/* Heading */}
-              <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, ease: "easeOut" }}
-                className="max-w-4xl relative"
-              >
+              <div className="max-w-4xl relative">
                 <p
                   className="mb-6 text-sm font-bold tracking-[0.2em] uppercase"
                   style={{ color: isDark ? "rgba(255,255,255,0.45)" : "rgba(30,30,60,0.45)" }}
@@ -1319,14 +1246,7 @@ function Landing() {
                     </span>
                   </h1>
                 </div>
-
-                {/* Diwali Festive Greeting Banner matching reference design */}
-                {diwaliActive && (
-                  <div className="mt-8 flex justify-center">
-                    <DiwaliBanner />
-                  </div>
-                )}
-              </motion.div>
+              </div>
             </div>
           </div>
         </section>
@@ -1335,12 +1255,7 @@ function Landing() {
         <section id="courses" className="pb-24 pt-6">
           <div className="mx-auto max-w-[1400px] px-6">
             {/* ── Tab Buttons + Controls Row ── */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-            >
+            <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               {/* Tab Switcher */}
               <div className="flex items-center gap-1 p-1 rounded-xl bg-secondary/60 border border-border/40 w-fit">
                 <button
@@ -1390,31 +1305,21 @@ function Landing() {
               <div className="flex items-center gap-3">
                 {/* Cart summary button (if items in cart) */}
                 {cartCount > 0 && (
-                  <motion.button
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
+                  <button
                     onClick={() => setCartDrawerOpen(true)}
                     className="flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-all hover:scale-105 active:scale-95 shadow-sm"
                   >
                     <ShoppingBag className="h-4 w-4" />
                     {cartCount} in cart
-                  </motion.button>
+                  </button>
                 )}
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <BorderBeamPanel
-                      radius={6}
-                      thickness={2}
-                      glow={false}
-                      className="p-0 border border-primary/20 bg-card hover:bg-secondary/50 transition-all cursor-pointer rounded-lg shadow-sm w-fit"
-                      role="button"
-                    >
-                      <div className="flex h-10 px-4 items-center justify-center gap-2 text-sm font-medium text-foreground">
+                      <Button variant="outline" className="h-10 px-4 text-sm font-medium">
                         {sortType === "latest" ? "Latest" : "Most Popular"}
-                        <ChevronDown className="h-4 w-4" />
-                      </div>
-                    </BorderBeamPanel>
+                        <ChevronDown className="h-4 w-4 ml-2" />
+                      </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => setSortType("latest")}>
@@ -1426,19 +1331,15 @@ function Landing() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-            </motion.div>
+            </div>
 
             {/* ── Search result label ── */}
             {searchQuery.trim() && (
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="mb-4 text-sm text-muted-foreground"
-              >
+              <p className="mb-4 text-sm text-muted-foreground">
                 {filteredCourses.length > 0
                   ? `${filteredCourses.length} result${filteredCourses.length === 1 ? "" : "s"} for "${searchQuery}"`
                   : `No results for "${searchQuery}"`}
-              </motion.p>
+              </p>
             )}
 
             {/* ── Course Lists ── */}
@@ -1446,140 +1347,119 @@ function Landing() {
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
               </div>
-            ) : (
-              <AnimatePresence mode="wait">
-                {activeTab === "free" ? (
-                  <motion.div
-                    key="free"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.25 }}
-                  >
-                    {/* Free Courses Section Header */}
-                    <div className="flex items-center gap-3 mb-6">
-                      <div className="h-8 w-1 rounded-full bg-green-500" />
-                      <div>
-                        <h2 className="font-display text-xl font-bold text-foreground">
-                          Free Courses
-                        </h2>
-                      </div>
-                    </div>
-                    {filteredFree.length > 0 ? (
-                      <div className="grid grid-cols-1 min-[450px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5 sm:gap-6">
-                        {filteredFree.map((course, index) => (
-                          <FreeCourseCard key={course.id} course={course} index={index} />
-                        ))}
-                      </div>
-                    ) : searchQuery.trim() ? (
-                      <div className="text-center py-16">
-                        <Search className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                        <p className="text-muted-foreground font-medium">
-                          No free courses match &ldquo;{searchQuery}&rdquo;
-                        </p>
-                        <button
-                          onClick={clearSearch}
-                          className="mt-4 text-sm text-primary hover:underline"
-                        >
-                          Clear search
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="text-center py-16 rounded-2xl border border-dashed border-green-500/30 bg-green-500/5">
-                        <span className="text-4xl mb-3 block">🎁</span>
-                        <p className="text-muted-foreground font-medium">No free courses yet</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Check back soon — free content is coming!
-                        </p>
-                      </div>
-                    )}
-                  </motion.div>
+            ) : activeTab === "free" ? (
+              <div>
+                {/* Free Courses Section Header */}
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="h-8 w-1 rounded-full bg-green-500" />
+                  <div>
+                    <h2 className="font-display text-xl font-bold text-foreground">
+                      Free Courses
+                    </h2>
+                  </div>
+                </div>
+                {filteredFree.length > 0 ? (
+                  <div className="grid grid-cols-1 min-[450px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5 sm:gap-6">
+                    {filteredFree.map((course, index) => (
+                      <FreeCourseCard key={course.id} course={course} index={index} />
+                    ))}
+                  </div>
+                ) : searchQuery.trim() ? (
+                  <div className="text-center py-16">
+                    <Search className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+                    <p className="text-muted-foreground font-medium">
+                      No free courses match &ldquo;{searchQuery}&rdquo;
+                    </p>
+                    <button
+                      onClick={clearSearch}
+                      className="mt-4 text-sm text-primary hover:underline"
+                    >
+                      Clear search
+                    </button>
+                  </div>
                 ) : (
-                  <motion.div
-                    key="exclusive"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.25 }}
-                  >
-                    {/* Bundle Unlocked Congratulations Banner */}
-                    {allBundleCoursesAccessed && accessedBundleCourses.length > 0 && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4 }}
-                        className="mb-8 rounded-2xl border-2 border-green-500/40 bg-gradient-to-r from-green-500/10 via-emerald-500/5 to-green-500/10 p-5 sm:p-6"
-                      >
-                        <div className="flex items-start gap-3 sm:gap-4">
-                          <div className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-green-500/15 border border-green-500/30 flex-shrink-0">
-                            <CheckCircle2 className="h-5 w-5 sm:h-6 sm:w-6 text-green-500" />
-                          </div>
-                          <div className="space-y-1.5 min-w-0">
-                            <h3 className="font-display text-base sm:text-lg font-extrabold text-green-700 dark:text-green-400">
-                              🎉 You accessed all {accessedBundleCourses.length} courses in the bundle — Congratulations!
-                            </h3>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                              Click on the{" "}
-                              <span className="inline-flex items-center gap-1 bg-green-600 text-white text-[11px] font-bold px-1.5 py-0.5 rounded">
-                                Access Course
-                              </span>{" "}
-                              button below to open each course.
-                            </p>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {/* Exclusive Courses Section Header */}
-                    <div className="flex items-center gap-3 mb-6">
-                      <div className="h-8 w-1 rounded-full bg-gradient-to-b from-amber-400 to-orange-500" />
-                      <div>
-                        <h2 className="font-display text-xl font-bold text-foreground">
-                          Exclusive Courses
-                        </h2>
-                        <p className="text-xs text-muted-foreground">
-                          Premium content crafted by industry experts
+                  <div className="text-center py-16 rounded-2xl border border-dashed border-green-500/30 bg-green-500/5">
+                    <span className="text-4xl mb-3 block">🎁</span>
+                    <p className="text-muted-foreground font-medium">No free courses yet</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Check back soon — free content is coming!
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                {/* Bundle Unlocked Congratulations Banner */}
+                {allBundleCoursesAccessed && accessedBundleCourses.length > 0 && (
+                  <div className="mb-8 rounded-2xl border-2 border-green-500/40 bg-gradient-to-r from-green-500/10 via-emerald-500/5 to-green-500/10 p-5 sm:p-6">
+                    <div className="flex items-start gap-3 sm:gap-4">
+                      <div className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-green-500/15 border border-green-500/30 flex-shrink-0">
+                        <CheckCircle2 className="h-5 w-5 sm:h-6 sm:w-6 text-green-500" />
+                      </div>
+                      <div className="space-y-1.5 min-w-0">
+                        <h3 className="font-display text-base sm:text-lg font-extrabold text-green-700 dark:text-green-400">
+                          🎉 You accessed all {accessedBundleCourses.length} courses in the bundle — Congratulations!
+                        </h3>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          Click on the{" "}
+                          <span className="inline-flex items-center gap-1 bg-green-600 text-white text-[11px] font-bold px-1.5 py-0.5 rounded">
+                            Access Course
+                          </span>{" "}
+                          button below to open each course.
                         </p>
                       </div>
                     </div>
-                    {filteredExclusive.length > 0 ? (
-                      <div className="flex flex-col gap-6">
-                        {filteredExclusive.map((course, index) => (
-                          <CourseCard
-                            key={course.id}
-                            course={course}
-                            onEnroll={handleDynamicCourseAccess}
-                            index={index}
-                          />
-                        ))}
-                      </div>
-                    ) : searchQuery.trim() ? (
-                      <div className="text-center py-16">
-                        <Search className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                        <p className="text-muted-foreground font-medium">
-                          No exclusive courses match &ldquo;{searchQuery}&rdquo;
-                        </p>
-                        <button
-                          onClick={clearSearch}
-                          className="mt-4 text-sm text-primary hover:underline"
-                        >
-                          Clear search
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="text-center py-16 rounded-2xl border border-dashed border-amber-500/30 bg-amber-500/5">
-                        <span className="text-4xl mb-3 block">⭐</span>
-                        <p className="text-muted-foreground font-medium">
-                          No exclusive courses yet
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Premium courses are being added soon!
-                        </p>
-                      </div>
-                    )}
-                  </motion.div>
+                  </div>
                 )}
-              </AnimatePresence>
+
+                {/* Exclusive Courses Section Header */}
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="h-8 w-1 rounded-full bg-gradient-to-b from-amber-400 to-orange-500" />
+                  <div>
+                    <h2 className="font-display text-xl font-bold text-foreground">
+                      Exclusive Courses
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                      Premium content crafted by industry experts
+                    </p>
+                  </div>
+                </div>
+                {filteredExclusive.length > 0 ? (
+                  <div className="flex flex-col gap-6">
+                    {filteredExclusive.map((course, index) => (
+                      <CourseCard
+                        key={course.id}
+                        course={course}
+                        onEnroll={handleDynamicCourseAccess}
+                        index={index}
+                      />
+                    ))}
+                  </div>
+                ) : searchQuery.trim() ? (
+                  <div className="text-center py-16">
+                    <Search className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+                    <p className="text-muted-foreground font-medium">
+                      No exclusive courses match &ldquo;{searchQuery}&rdquo;
+                    </p>
+                    <button
+                      onClick={clearSearch}
+                      className="mt-4 text-sm text-primary hover:underline"
+                    >
+                      Clear search
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-center py-16 rounded-2xl border border-dashed border-amber-500/30 bg-amber-500/5">
+                    <span className="text-4xl mb-3 block">⭐</span>
+                    <p className="text-muted-foreground font-medium">
+                      No exclusive courses yet
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Premium courses are being added soon!
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </section>
@@ -1634,10 +1514,10 @@ function Landing() {
             </h2>
           </div>
 
-          {/* ── Social buttons — centered row with GradientButton ── */}
+          {/* ── Social buttons — centered row ── */}
           <div className="flex flex-wrap items-center justify-center gap-4 mb-12">
             {/* Instagram */}
-            <GradientButton asChild>
+            <Button variant="outline" asChild>
               <a
                 href="https://www.instagram.com/abhis.club"
                 target="_blank"
@@ -1647,10 +1527,10 @@ function Landing() {
                 <Instagram className="h-5 w-5" />
                 @abhis.club
               </a>
-            </GradientButton>
+            </Button>
 
             {/* Telegram */}
-            <GradientButton variant="variant" asChild>
+            <Button variant="outline" asChild>
               <a
                 href="https://t.me/Avii_tech_family"
                 target="_blank"
@@ -1660,10 +1540,10 @@ function Landing() {
                 <Send className="h-5 w-5" />
                 Avii Tech Family
               </a>
-            </GradientButton>
+            </Button>
 
             {/* YouTube */}
-            <GradientButton asChild>
+            <Button variant="outline" asChild>
               <a
                 href="https://www.youtube.com/@abhis.club"
                 target="_blank"
@@ -1673,10 +1553,10 @@ function Landing() {
                 <Youtube className="h-5 w-5" />
                 YouTube Channel
               </a>
-            </GradientButton>
+            </Button>
 
             {/* Facebook */}
-            <GradientButton variant="variant" asChild>
+            <Button variant="outline" asChild>
               <a
                 href="https://www.facebook.com/share/1BtpMK2ij3/?mibextid=wwXIfr"
                 target="_blank"
@@ -1686,7 +1566,7 @@ function Landing() {
                 <Facebook className="h-5 w-5" />
                 Facebook Page
               </a>
-            </GradientButton>
+            </Button>
           </div>
 
           {/* ── Bottom bar ── */}
@@ -1723,7 +1603,7 @@ function Landing() {
           onPaymentSuccess={handlePaymentSuccess}
         />
       )}
-    </KineticGrid>
+    </>
   );
 }
 
@@ -1847,13 +1727,7 @@ function HelpCenterSection() {
     >
       <div className="mx-auto max-w-[860px]">
         {/* ── Header ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-14"
-        >
+        <div className="text-center mb-14">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-sm font-semibold text-primary mb-5">
             <HelpCircle className="h-4 w-4" />
             Help Center
@@ -1867,17 +1741,13 @@ function HelpCenterSection() {
           <p className="text-muted-foreground text-base max-w-xl mx-auto">
             Can't find an answer? Scroll down and contact our team directly — we respond within 24 hours.
           </p>
-        </motion.div>
+        </div>
 
         {/* ── FAQ Accordion ── */}
         <div className="flex flex-col gap-3 mb-16">
           {FAQ_ITEMS.map((item, i) => (
-            <motion.div
+            <div
               key={i}
-              initial={{ opacity: 0, y: 12 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.35, delay: i * 0.05 }}
               className={`rounded-2xl border transition-all duration-300 overflow-hidden ${
                 openIndex === i
                   ? "border-primary/40 bg-primary/5 shadow-md shadow-primary/10"
@@ -1900,34 +1770,19 @@ function HelpCenterSection() {
                   )}
                 </span>
               </button>
-              <AnimatePresence initial={false}>
-                {openIndex === i && (
-                  <motion.div
-                    key="content"
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.28, ease: "easeInOut" }}
-                    className="overflow-hidden"
-                  >
-                    <p className="px-6 pb-5 text-sm sm:text-base text-muted-foreground leading-relaxed border-t border-border/30 pt-4">
-                      {item.a}
-                    </p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
+              {openIndex === i && (
+                <div className="overflow-hidden">
+                  <p className="px-6 pb-5 text-sm sm:text-base text-muted-foreground leading-relaxed border-t border-border/30 pt-4">
+                    {item.a}
+                  </p>
+                </div>
+              )}
+            </div>
           ))}
         </div>
 
         {/* ── Contact Our Team ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="rounded-3xl border border-border/50 bg-card shadow-xl overflow-hidden"
-        >
+        <div className="rounded-3xl border border-border/50 bg-card shadow-xl overflow-hidden">
           {/* Card header */}
           <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 px-8 py-8 text-white text-center">
             <div className="flex items-center justify-center gap-2 mb-2">
@@ -1941,11 +1796,7 @@ function HelpCenterSection() {
 
           <div className="p-8">
             {submitted ? (
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="flex flex-col items-center justify-center gap-4 py-8 text-center"
-              >
+              <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
                 <div className="h-16 w-16 rounded-full bg-green-500/15 flex items-center justify-center">
                   <Check className="h-8 w-8 text-green-500" />
                 </div>
@@ -1959,7 +1810,7 @@ function HelpCenterSection() {
                 >
                   Send another message
                 </button>
-              </motion.div>
+              </div>
             ) : (
               <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -2114,7 +1965,7 @@ function HelpCenterSection() {
               </form>
             )}
           </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

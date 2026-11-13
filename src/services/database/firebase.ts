@@ -61,7 +61,7 @@ function initializeFirebase(): Promise<void> {
 }
 
 // Export a function to get the db instance safely
-export function getDb() {
+function getDb() {
   if (!db) {
     console.warn("Firestore db not initialized, returning null");
     return null;
@@ -70,7 +70,7 @@ export function getDb() {
 }
 
 // Export a function to get the auth instance safely
-export function getAuthInstance() {
+function getAuthInstance() {
   if (!auth) {
     console.warn("Firebase auth not initialized, returning null");
     return null;
@@ -78,4 +78,4 @@ export function getAuthInstance() {
   return auth;
 }
 
-export { auth, db, initializationError, initializeFirebase };
+export { auth, db, initializationError, initializeFirebase, getDb, getAuthInstance };

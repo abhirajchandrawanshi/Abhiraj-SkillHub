@@ -59,8 +59,10 @@ export const Route = createFileRoute("/admin/courses")({
   component: AdminCourses,
 });
 
-function AdminCourseThumbnail({ src, title }: { src?: string; title: string }) {
+function AdminCourseThumbnail({ src, title }: { src: string | undefined; title: string }) {
   const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
   if (!src || hasError) {
     return (
       <div className="h-12 w-12 rounded-md bg-secondary/80 border border-border flex items-center justify-center shrink-0 text-sm font-bold text-muted-foreground select-none">
@@ -74,8 +76,12 @@ function AdminCourseThumbnail({ src, title }: { src?: string; title: string }) {
       alt={title}
       loading="lazy"
       decoding="async"
-      onError={() => setHasError(true)}
-      className="h-12 w-12 rounded-md object-contain bg-secondary/60 shrink-0"
+      onError={() => {
+        setHasError(true);
+        setIsLoading(false);
+      }}
+      onLoad={() => setIsLoading(false)}
+      className={`h-12 w-12 rounded-md object-contain bg-secondary/60 shrink-0 ${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity`}
     />
   );
 }
@@ -291,7 +297,7 @@ function AdminCourses() {
                       <TableRow key={course.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <AdminCourseThumbnail src={course.thumbnail} title={course.title} />
+                            <AdminCourseThumbnail src={course.thumbnail ? course.thumbnail : undefined} title={course.title} />
                             <div>
                               <div className="font-medium">{course.title}</div>
                               <div className="text-sm text-muted-foreground line-clamp-1">

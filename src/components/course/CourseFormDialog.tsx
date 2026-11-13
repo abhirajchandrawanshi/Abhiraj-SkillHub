@@ -138,6 +138,8 @@ export function CourseFormDialog({
       const url = URL.createObjectURL(file);
       setThumbnailPreview(url);
       setImageError(false);
+      // Clear the URL field when a file is selected
+      setValue("thumbnail", "");
     } else {
       setThumbnailPreview("");
     }
@@ -181,8 +183,12 @@ export function CourseFormDialog({
         publishedDate: course.publishedDate || "",
       });
       setResources(course.resources || []);
+      // Show existing thumbnail in preview
       setThumbnailPreview("");
       setImageError(false);
+      // Clear file input
+      const fileInput = document.getElementById('thumbnail-file') as HTMLInputElement;
+      if (fileInput) fileInput.value = "";
     } else {
       reset({
         courseType: defaultCourseType,
@@ -242,9 +248,10 @@ export function CourseFormDialog({
 
       const fileInput = document.getElementById('thumbnail-file') as HTMLInputElement;
       const file = fileInput?.files?.[0];
-      
+
       let thumbnailUrl = values.thumbnail;
 
+      // Handle file upload
       if (file) {
         setIsUploading(true);
         try {
@@ -259,6 +266,10 @@ export function CourseFormDialog({
         } finally {
           setIsUploading(false);
         }
+      } else if (!thumbnailUrl && course?.thumbnail) {
+        // If no new file and no URL provided, keep existing thumbnail when editing
+        thumbnailUrl = course.thumbnail;
+        values.thumbnail = thumbnailUrl;
       }
 
       // Handle PDF upload
@@ -449,7 +460,7 @@ export function CourseFormDialog({
           </div>
 
           {courseType !== "free" && (
-            <div className={`grid gap-4 ${courseType === "free" ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+            <div className={`grid gap-4 md:grid-cols-3`}>
               <div className="space-y-2">
                 <Label htmlFor="rating">Rating (0-5)</Label>
                 <Input
@@ -570,6 +581,10 @@ export function CourseFormDialog({
                   onChange={(e) => {
                     register("thumbnail").onChange(e);
                     setImageError(false);
+                    // Clear file input when URL is changed
+                    const fileInput = document.getElementById('thumbnail-file') as HTMLInputElement;
+                    if (fileInput) fileInput.value = "";
+                    setThumbnailPreview("");
                   }}
                 />
               </div>

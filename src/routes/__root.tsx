@@ -7,18 +7,13 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, lazy, Suspense, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportRuntimeError } from "../lib/runtime-error-reporting";
 import { AuthProvider } from "../features/auth/auth-provider";
 import { AdminAuthProvider } from "../features/auth/use-admin-auth";
 import { ThemeProvider } from "../hooks/use-theme";
-
-// Code-split Diwali theme so initial critical bundle is ultra-lightweight on slow/unstable networks
-const DiwaliTheme = lazy(() =>
-  import("../components/diwali/DiwaliTheme").then((m) => ({ default: m.DiwaliTheme }))
-);
 
 function NotFoundComponent() {
   return (
@@ -151,9 +146,6 @@ function RootComponent() {
       <ThemeProvider>
         <AdminAuthProvider>
           <AuthProvider>
-            <Suspense fallback={null}>
-              <DiwaliTheme />
-            </Suspense>
             <Outlet />
           </AuthProvider>
         </AdminAuthProvider>

@@ -140,7 +140,7 @@ export function CartDrawer({ open, onClose, onCheckout }: CartDrawerProps) {
                             : "border-border"
                         }`}
                       >
-                        <CartItemThumbnail src={course.thumbnail} title={course.title} />
+                        <CartItemThumbnail src={course.thumbnail ? course.thumbnail : undefined} title={course.title} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold leading-tight line-clamp-2">
                             {course.title}
@@ -293,8 +293,10 @@ export function CartDrawer({ open, onClose, onCheckout }: CartDrawerProps) {
   );
 }
 
-function CartItemThumbnail({ src, title }: { src?: string; title: string }) {
+function CartItemThumbnail({ src, title }: { src: string | undefined; title: string }) {
   const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
   if (!src || hasError) {
     return (
       <div className="h-14 w-14 rounded-lg bg-secondary/80 border border-border flex items-center justify-center shrink-0 text-sm font-bold text-muted-foreground select-none">
@@ -308,8 +310,12 @@ function CartItemThumbnail({ src, title }: { src?: string; title: string }) {
       alt={title}
       loading="lazy"
       decoding="async"
-      onError={() => setHasError(true)}
-      className="h-14 w-14 rounded-lg object-contain bg-secondary/60 flex-shrink-0"
+      onError={() => {
+        setHasError(true);
+        setIsLoading(false);
+      }}
+      onLoad={() => setIsLoading(false)}
+      className={`h-14 w-14 rounded-lg object-contain bg-secondary/60 flex-shrink-0 ${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity`}
     />
   );
 }
