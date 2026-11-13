@@ -5,7 +5,7 @@ import { getAdminFirestore } from "./admin-firestore";
 // In-memory cache for published courses
 let cachedCourses: any[] | null = null;
 let coursesCacheTimestamp = 0;
-const COURSES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const COURSES_CACHE_TTL = 30 * 1000; // 30 seconds - reduced for faster admin updates
 
 /**
  * Securely fetches published courses and strips out private data

@@ -746,9 +746,9 @@ function Landing() {
       return { courses: result as Course[] };
     },
     enabled: typeof window !== "undefined",
-    // Course catalog is semi-static: admin changes propagate within 5 minutes
-    staleTime: 5 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
+    // Course catalog is semi-static: admin changes propagate within 30 seconds
+    staleTime: 30 * 1000,
+    gcTime: 2 * 60 * 1000,
   });
 
   // Sort courses

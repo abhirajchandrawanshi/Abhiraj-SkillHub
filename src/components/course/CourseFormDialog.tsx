@@ -597,8 +597,10 @@ export function CourseFormDialog({
                     src={thumbnailPreview || watchedThumbnail}
                     alt="Thumbnail preview"
                     className="h-full w-full object-cover"
+                    crossOrigin="anonymous"
                     onError={() => setImageError(true)}
                     onLoad={() => setImageError(false)}
+                    suppressHydrationWarning
                   />
                 </div>
                 <div className="min-w-0 flex-1 text-xs">

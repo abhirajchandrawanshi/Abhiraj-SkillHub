@@ -76,12 +76,14 @@ function AdminCourseThumbnail({ src, title }: { src: string | undefined; title: 
       alt={title}
       loading="lazy"
       decoding="async"
+      crossOrigin="anonymous"
       onError={() => {
         setHasError(true);
         setIsLoading(false);
       }}
       onLoad={() => setIsLoading(false)}
       className={`h-12 w-12 rounded-md object-contain bg-secondary/60 shrink-0 ${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity`}
+      suppressHydrationWarning
     />
   );
 }
